@@ -2,6 +2,7 @@ import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
 import bcrypt
+from datetime import datetime,timezone
 
 # Conexión a la base de datos de Supabase
 url = st.secrets["supabase"]["SUPABASE_URL"]
@@ -34,12 +35,7 @@ def obtener_cuadros(centro_id):
     return pd.DataFrame(response.data)
 
 # Función para insertar un nuevo cuadro
-def agregar_cuadro(centro_id, tipo, planta, nombre, numero):
-    existing_cuadro = supabase.table('cuadros').select('*').eq('numero', numero).eq('centro_id', centro_id).execute()
-    
-    if existing_cuadro.data:
-        raise ValueError(f"Ya existe un cuadro con el número {numero} en este centro.")
-    
+def agregar_cuadro(centro_id, tipo, planta, nombre, numero, usuario):
     data = {
         "centro_id": centro_id,
         "tipo": tipo,
@@ -47,7 +43,9 @@ def agregar_cuadro(centro_id, tipo, planta, nombre, numero):
         "nombre": nombre,
         "numero": numero,
         "tierra_ohmnios": None,
-        "aislamiento_megaohmnios": None
+        "aislamiento_megaohmnios": None,
+        "ultimo_usuario": usuario,
+        "ultima_modificacion": datetime.now(timezone.utc).isoformat()
     }
     response = supabase.table('cuadros').insert(data).execute()
     return response
@@ -61,6 +59,7 @@ def pantalla_login():
     if st.button("Ingresar"):
         if verificar_login(username, password):
             st.session_state['autenticado'] = True
+            st.session_state['usuario'] = username
             st.rerun()
         else:
             st.error("Usuario o contraseña incorrectos")
@@ -89,6 +88,15 @@ def pantalla_inicio():
             st.session_state["pagina"] = "gestion"
             st.rerun()
 
+def actualizar_cuadro(cuadro_id, tierra, aislamiento, usuario):
+    data = {
+        "tierra_ohmnios": tierra,
+        "aislamiento_megaohmnios": aislamiento,
+        "ultimo_usuario": usuario,
+        "ultima_modificacion": datetime.now(timezone.utc).isoformat()
+    }
+    supabase.table('cuadros').update(data).eq('id', cuadro_id).execute()
+
 def pantalla_gestion():
     centro_id = st.session_state["centro_seleccionado"]
     
@@ -112,23 +120,19 @@ def pantalla_gestion():
         aislamiento = st.number_input("Medición de Aislamiento (MΩ)", value=row["aislamiento_megaohmnios"] or 0.0, key=f"aislamiento_{row['id']}")
         
         if st.button(f"Actualizar {row['nombre']}", key=f"update_{row['id']}"):
-            data = {
-                "tierra_ohmnios": tierra,
-                "aislamiento_megaohmnios": aislamiento
-            }
-            supabase.table('cuadros').update(data).eq('id', row["id"]).execute()
+            actualizar_cuadro(row["id"], tierra, aislamiento, st.session_state["usuario"])
             st.rerun()
 
     st.subheader("Añadir Cuadro Eléctrico")
     tipo = st.selectbox("Tipo", ["CGBT", "CS", "CT", "CC"], key="tipo")
     planta = st.selectbox("Planta",["Baja", "Primera", "Segunda", "Tercera"], key="planta")
-    numero = st.text_input("Número del cuadro", key="numero") 
+    numero = st.number_input("Número del cuadro", key="numero",min_value=0, max_value=100, step=1) 
     nombre = st.text_input("Nombre del cuadro", key="nombre")
-
+    usuario = st.session_state['usuario']
     if st.button("Añadir Cuadro"):
         if nombre and planta and numero:
             try:
-                agregar_cuadro(centro_id, tipo, planta, nombre, numero)
+                agregar_cuadro(centro_id, tipo, planta, nombre, numero, usuario)
                 st.rerun()
             except ValueError as e:
                 st.error(str(e))

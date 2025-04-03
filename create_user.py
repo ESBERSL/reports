@@ -7,10 +7,10 @@ key = st.secrets["supabase"]["SUPABASE_KEY"]
 
 supabase = create_client(url, key)
 
-password = "tu_contraseña_segura"
+password = input("pass de la cuenta nueva: ")
 hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 supabase.table('usuarios').insert({
-    "username": "elpepe",
+    "username": input("user nuevo: "),
     "password": hashed_password
 }).execute()    
