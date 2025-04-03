@@ -175,7 +175,7 @@ def pantalla_gestion():
 
     st.subheader("Añadir Cuadro Eléctrico")
     tipo = st.selectbox("Tipo", ["CGBT", "CS", "CT", "CC"], key="tipo")
-    numero = st.number_input("Número del cuadro", key="numero",min_value=0.0, step=1.0) 
+    numero = st.number_input("Número del cuadro", key="numero",min_value=0,max_value=100, step=1) 
     nombre = st.text_input("Nombre del cuadro", key="nombre")
     usuario = st.session_state['usuario']
     if st.button("Añadir Cuadro"):
