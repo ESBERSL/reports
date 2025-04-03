@@ -2,3 +2,5 @@ streamlit
 streamlit-js-eval
 supabase
 bcrypt
+extra-streamlit-components
+streamlit-javascrip

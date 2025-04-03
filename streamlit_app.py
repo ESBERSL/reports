@@ -3,11 +3,50 @@ from supabase import create_client, Client
 import pandas as pd
 import bcrypt
 from datetime import datetime,timezone
+from streamlit_javascript import st_javascript
+
 
 # Conexión a la base de datos de Supabase
 url = st.secrets["supabase"]["SUPABASE_URL"]
 key = st.secrets["supabase"]["SUPABASE_KEY"]
 supabase: Client = create_client(url, key)
+
+def get_local_storage(key):
+    value = st_javascript(f"JSON.parse(localStorage.getItem('{key}'))")
+    return value if value not in [None, "null"] else None
+
+def set_local_storage(key, value):
+    st_javascript(f"localStorage.setItem('{key}', JSON.stringify({value}));")
+
+def delete_local_storage(key):
+    st_javascript(f"localStorage.removeItem('{key}');")
+
+# Función para cargar el estado desde localStorage
+def load_session_state():
+    session_keys = ['autenticado', 'usuario', 'pagina', 'centro_seleccionado']
+    
+    if not st.session_state.get('session_loaded'):
+        for key in session_keys:
+            value = get_local_storage(key)
+            if value is not None:
+                st.session_state[key] = value
+        st.session_state['session_loaded'] = True
+
+# Función para guardar el estado en localStorage
+def save_session_state():
+    session_data = {
+        'autenticado': st.session_state.get('autenticado'),
+        'usuario': st.session_state.get('usuario'),
+        'pagina': st.session_state.get('pagina'),
+        'centro_seleccionado': st.session_state.get('centro_seleccionado')
+    }
+    
+    for key, value in session_data.items():
+        if value is not None:
+            set_local_storage(key, value)
+        else:
+            delete_local_storage(key)
+
 
 # Función para verificar credenciales
 def verificar_login(username, password):
@@ -35,11 +74,10 @@ def obtener_cuadros(centro_id):
     return pd.DataFrame(response.data)
 
 # Función para insertar un nuevo cuadro
-def agregar_cuadro(centro_id, tipo, planta, nombre, numero, usuario):
+def agregar_cuadro(centro_id, tipo, nombre, numero, usuario):
     data = {
         "centro_id": centro_id,
         "tipo": tipo,
-        "planta": planta,
         "nombre": nombre,
         "numero": numero,
         "tierra_ohmnios": None,
@@ -60,6 +98,8 @@ def pantalla_login():
         if verificar_login(username, password):
             st.session_state['autenticado'] = True
             st.session_state['usuario'] = username
+            st.session_state['pagina'] = "inicio"
+            save_session_state()
             st.rerun()
         else:
             st.error("Usuario o contraseña incorrectos")
@@ -69,6 +109,10 @@ def pantalla_inicio():
     
     if st.button("Cerrar sesión"):
         st.session_state.clear()
+        delete_local_storage('autenticado')
+        delete_local_storage('usuario')
+        delete_local_storage('pagina')
+        delete_local_storage('centro_seleccionado')
         st.rerun()
     
     provincia = st.selectbox("Filtrar por provincia", ["Todas", "Alicante", "Valencia", "Castellón"])
@@ -86,6 +130,7 @@ def pantalla_inicio():
         if st.button(f"Gestionar {row['nombre']}"):
             st.session_state["centro_seleccionado"] = row["id"]
             st.session_state["pagina"] = "gestion"
+            save_session_state()
             st.rerun()
 
 def actualizar_cuadro(cuadro_id, tierra, aislamiento, usuario):
@@ -109,15 +154,20 @@ def pantalla_gestion():
     if st.button("Volver al listado"):
         st.session_state["pagina"] = "inicio"
         st.session_state["centro_seleccionado"] = None
+        save_session_state()
         st.rerun()
 
     df_cuadros = obtener_cuadros(centro_id)
 
     for _, row in df_cuadros.iterrows():
-        st.subheader(f"Cuadro: {row['nombre']}")
+        if row['tipo'] == "CGBT":
+            nom_cuadro= (row['nombre'])
+        else:
+            nom_cuadro= (f"{row['tipo']}{row['numero']}-{row['nombre']}")   
+        st.subheader(f"Cuadro: {nom_cuadro}")
         
-        tierra = st.number_input("Medición de Tierra (Ω)", value=row["tierra_ohmnios"] or 0.0, key=f"tierra_{row['id']}")
-        aislamiento = st.number_input("Medición de Aislamiento (MΩ)", value=row["aislamiento_megaohmnios"] or 0.0, key=f"aislamiento_{row['id']}")
+        tierra = st.number_input("Medición de Tierra (Ω)", value=row["tierra_ohmnios"] or 0.0, key=f"tierra_{row['id']}", min_value=0.0, step=1.0)
+        aislamiento = st.number_input("Medición de Aislamiento (MΩ)", value=row["aislamiento_megaohmnios"] or 0.0, key=f"aislamiento_{row['id']}", min_value=0.0, step=1.0)
         
         if st.button(f"Actualizar {row['nombre']}", key=f"update_{row['id']}"):
             actualizar_cuadro(row["id"], tierra, aislamiento, st.session_state["usuario"])
@@ -125,14 +175,13 @@ def pantalla_gestion():
 
     st.subheader("Añadir Cuadro Eléctrico")
     tipo = st.selectbox("Tipo", ["CGBT", "CS", "CT", "CC"], key="tipo")
-    planta = st.selectbox("Planta",["Baja", "Primera", "Segunda", "Tercera"], key="planta")
-    numero = st.number_input("Número del cuadro", key="numero",min_value=0, max_value=100, step=1) 
+    numero = st.number_input("Número del cuadro", key="numero",min_value=0, step=1) 
     nombre = st.text_input("Nombre del cuadro", key="nombre")
     usuario = st.session_state['usuario']
     if st.button("Añadir Cuadro"):
-        if nombre and planta and numero:
+        if nombre:
             try:
-                agregar_cuadro(centro_id, tipo, planta, nombre, numero, usuario)
+                agregar_cuadro(centro_id, tipo, nombre, numero, usuario)
                 st.rerun()
             except ValueError as e:
                 st.error(str(e))
@@ -140,6 +189,9 @@ def pantalla_gestion():
             st.warning("Debes completar todos los campos")
 
 # ------------------ FLUJO PRINCIPAL ------------------ #
+# Cargar el estado al inicio
+load_session_state()
+
 if 'autenticado' not in st.session_state:
     st.session_state['autenticado'] = False
 
@@ -155,3 +207,4 @@ else:
         pantalla_inicio()
     elif st.session_state["pagina"] == "gestion":
         pantalla_gestion()
+    save_session_state()       
