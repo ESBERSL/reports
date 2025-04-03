@@ -11,42 +11,6 @@ url = st.secrets["supabase"]["SUPABASE_URL"]
 key = st.secrets["supabase"]["SUPABASE_KEY"]
 supabase: Client = create_client(url, key)
 
-def get_local_storage(key):
-    value = st_javascript(f"JSON.parse(localStorage.getItem('{key}'))")
-    return value if value not in [None, "null"] else None
-
-def set_local_storage(key, value):
-    st_javascript(f"localStorage.setItem('{key}', JSON.stringify({value}));")
-
-def delete_local_storage(key):
-    st_javascript(f"localStorage.removeItem('{key}');")
-
-# Función para cargar el estado desde localStorage
-def load_session_state():
-    session_keys = ['autenticado', 'usuario', 'pagina', 'centro_seleccionado']
-    
-    if not st.session_state.get('session_loaded'):
-        for key in session_keys:
-            value = get_local_storage(key)
-            if value is not None:
-                st.session_state[key] = value
-        st.session_state['session_loaded'] = True
-
-# Función para guardar el estado en localStorage
-def save_session_state():
-    session_data = {
-        'autenticado': st.session_state.get('autenticado'),
-        'usuario': st.session_state.get('usuario'),
-        'pagina': st.session_state.get('pagina'),
-        'centro_seleccionado': st.session_state.get('centro_seleccionado')
-    }
-    
-    for key, value in session_data.items():
-        if value is not None:
-            set_local_storage(key, value)
-        else:
-            delete_local_storage(key)
-
 
 # Función para verificar credenciales
 def verificar_login(username, password):
@@ -99,7 +63,6 @@ def pantalla_login():
             st.session_state['autenticado'] = True
             st.session_state['usuario'] = username
             st.session_state['pagina'] = "inicio"
-            save_session_state()
             st.rerun()
         else:
             st.error("Usuario o contraseña incorrectos")
@@ -109,10 +72,6 @@ def pantalla_inicio():
     
     if st.button("Cerrar sesión"):
         st.session_state.clear()
-        delete_local_storage('autenticado')
-        delete_local_storage('usuario')
-        delete_local_storage('pagina')
-        delete_local_storage('centro_seleccionado')
         st.rerun()
     
     provincia = st.selectbox("Filtrar por provincia", ["Todas", "Alicante", "Valencia", "Castellón"])
@@ -130,7 +89,6 @@ def pantalla_inicio():
         if st.button(f"Gestionar {row['nombre']}"):
             st.session_state["centro_seleccionado"] = row["id"]
             st.session_state["pagina"] = "gestion"
-            save_session_state()
             st.rerun()
 
 def actualizar_cuadro(cuadro_id, tierra, aislamiento, usuario):
@@ -154,7 +112,6 @@ def pantalla_gestion():
     if st.button("Volver al listado"):
         st.session_state["pagina"] = "inicio"
         st.session_state["centro_seleccionado"] = None
-        save_session_state()
         st.rerun()
 
     df_cuadros = obtener_cuadros(centro_id)
@@ -190,8 +147,6 @@ def pantalla_gestion():
 
 # ------------------ FLUJO PRINCIPAL ------------------ #
 # Cargar el estado al inicio
-load_session_state()
-
 if 'autenticado' not in st.session_state:
     st.session_state['autenticado'] = False
 
@@ -206,5 +161,4 @@ else:
     if st.session_state["pagina"] == "inicio":
         pantalla_inicio()
     elif st.session_state["pagina"] == "gestion":
-        pantalla_gestion()
-    save_session_state()       
+        pantalla_gestion()     
