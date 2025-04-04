@@ -116,7 +116,7 @@ def generar_informe_word(centro_id):
       #pypandoc.download_pandoc()
       #pypandoc.convert_file("/tmp/informe.docx", to='pdf', outputfile=output_pdf)
     with open("/tmp/informe.docx", "rb") as pdf_file:
-        st.download_button("Descargar Informe", pdf_file, file_name="informe_generado.docx", mime="application/pdf")
+        st.download_button("Descargar Informe", pdf_file, file_name="informe_generado.docx", mime="application/docx")
 
     
 # Función para obtener el archivo Word generado

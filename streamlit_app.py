@@ -98,6 +98,9 @@ def pantalla_inicio():
             st.session_state["pagina"] = "gestion"
             st.rerun()
 
+def eliminar_cuadro(cuadro_id):
+    supabase.table('cuadros').delete().eq('id', cuadro_id).execute()
+
 def actualizar_cuadro(cuadro_id, tierra, aislamiento, usuario):
     data = {
         "tierra_ohmnios": tierra,
@@ -122,20 +125,42 @@ def pantalla_gestion():
         st.rerun()
 
     df_cuadros = obtener_cuadros(centro_id)
-
+        
     for _, row in df_cuadros.iterrows():
-        if row['tipo'] == "CGBT":
-            nom_cuadro= (row['nombre'])
-        else:
-            nom_cuadro= (f"{row['tipo']}{row['numero']}-{row['nombre']}")   
-        st.subheader(f"Cuadro: {nom_cuadro}")
-        
-        tierra = st.number_input("Medición de Tierra (Ω)", value=row["tierra_ohmnios"] or 0.0, key=f"tierra_{row['id']}", min_value=0.0, step=1.0)
-        aislamiento = st.number_input("Medición de Aislamiento (MΩ)", value=row["aislamiento_megaohmnios"] or 0.0, key=f"aislamiento_{row['id']}", min_value=0.0, step=1.0)
-        
-        if st.button(f"Actualizar {row['nombre']}", key=f"update_{row['id']}"):
-            actualizar_cuadro(row["id"], tierra, aislamiento, st.session_state["usuario"])
-            st.rerun()
+        cuadro_id = row['id']
+        st.subheader(f"Cuadro: {row['nombre']}")
+
+        # Campos de entrada únicos
+        tierra = st.number_input(
+            "Medición de Tierra (Ω)",
+            value=row["tierra_ohmnios"] or 0.0,
+            key=f"tierra_input_{cuadro_id}",
+            min_value=0.0,
+            step=1.0
+        )
+
+        aislamiento = st.number_input(
+            "Medición de Aislamiento (MΩ)",
+            value=row["aislamiento_megaohmnios"] or 0.0,
+            key=f"aislamiento_input_{cuadro_id}",
+            min_value=0.0,
+            step=1.0
+        )
+
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            if st.button("Actualizar", key=f"actualizar_btn_{cuadro_id}"):
+                actualizar_cuadro(cuadro_id, tierra, aislamiento, st.session_state["usuario"])
+                st.rerun()
+
+        with col2:
+            with st.expander("Eliminar cuadro", expanded=False):
+                st.warning("Esta acción no se puede deshacer.")
+                if st.button("Confirmar eliminación", key=f"eliminar_btn_{cuadro_id}"):
+                    eliminar_cuadro(cuadro_id)
+                    st.success(f"Cuadro '{row['nombre']}' eliminado.")
+                    st.rerun()
 
     st.subheader("Añadir Cuadro Eléctrico")
     tipo = st.selectbox("Tipo", ["CGBT", "CS", "CT", "CC"], key="tipo")
