@@ -4,3 +4,4 @@ supabase
 bcrypt
 extra-streamlit-components
 streamlit-javascript
+python-docx

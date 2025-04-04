@@ -15,8 +15,7 @@ st.set_page_config(
 
 st.markdown("""
 # Gestión de Edificios
-Aplicación de Gestión de Edificios para mantenimientos eléctricos de ESBER SL
-s""")
+Aplicación de Gestión de Edificios para mantenimientos eléctricos de ESBER SL""")
 
 # Conexión a la base de datos de Supabase
 url = st.secrets["supabase"]["SUPABASE_URL"]
