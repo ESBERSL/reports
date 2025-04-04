@@ -11,9 +11,12 @@ import os
 st.set_page_config(
     page_title="Gestión de Centros",  # Nombre de la pestaña en el navegador
     page_icon="🏢",  # Icono de la pestaña 
-    layout="wide"  # Diseño de la app
 )
 
+st.markdown("""
+# 📌 Gestión de Centros Educativos
+Aplicación de Gestión de Edificios para mantenimientos eléctricos de ESBER SL
+s""")
 
 # Conexión a la base de datos de Supabase
 url = st.secrets["supabase"]["SUPABASE_URL"]
