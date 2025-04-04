@@ -95,6 +95,7 @@ def pantalla_inicio():
     for _, row in df_centros.iterrows():
         if st.button(f"Gestionar {row['nombre']}"):
             st.session_state["centro_seleccionado"] = row["id"]
+            st.session_state["nombre_centro"] = row["nombre"]
             st.session_state["pagina"] = "gestion"
             st.rerun()
 
@@ -112,8 +113,8 @@ def actualizar_cuadro(cuadro_id, tierra, aislamiento, usuario):
 
 def pantalla_gestion():
     centro_id = st.session_state["centro_seleccionado"]
-    
-    st.title(f"Gestión del Centro {centro_id}")
+    nomb=st.session_state["nombre_centro"]
+    st.title(f"Gestión del Centro {nomb}")
     
     if st.button("Cerrar sesión"):
         st.session_state.clear()

@@ -115,8 +115,14 @@ def generar_informe_word(centro_id):
       #output_pdf = "/tmp/informe.pdf"
       #pypandoc.download_pandoc()
       #pypandoc.convert_file("/tmp/informe.docx", to='pdf', outputfile=output_pdf)
+    
+    
+    direccion_centro = datos_centro["direccion"]
+    cp_centro = str(int(float(datos_centro["cp"])))
+    provincia_centro = datos_centro["provincia"]
+    fname = f"{fecha_actual.strftime('%Y-%m-%d')}_{datos_centro['nombre'].split('_')[0]}_InfTierras"
     with open("/tmp/informe.docx", "rb") as pdf_file:
-        st.download_button("Descargar Informe", pdf_file, file_name="informe_generado.docx", mime="application/docx")
+        st.download_button("Descargar Informe", pdf_file, file_name=(f"{fname}.docx"), mime="application/docx")
 
     
 # Función para obtener el archivo Word generado
