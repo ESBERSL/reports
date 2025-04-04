@@ -3,7 +3,16 @@ from supabase import create_client, Client
 import pandas as pd
 import bcrypt
 from datetime import datetime,timezone
-from streamlit_javascript import st_javascript
+from informes import obtener_word
+from io import BytesIO
+import os
+
+
+st.set_page_config(
+    page_title="Gestión de Centros",  # Nombre de la pestaña en el navegador
+    page_icon="🏢",  # Icono de la pestaña 
+    layout="wide"  # Diseño de la app
+)
 
 
 # Conexión a la base de datos de Supabase
@@ -51,6 +60,15 @@ def agregar_cuadro(centro_id, tipo, nombre, numero, usuario):
     }
     response = supabase.table('cuadros').insert(data).execute()
     return response
+def generar_informe(centro_id):
+    # Obtener el archivo Word con los datos
+    word_buffer = obtener_word(centro_id)
+    
+    # Guardar temporalmente el archivo Word
+    word_file_path = f"/tmp/informe_tierras_{centro_id}.docx"
+    with open(word_file_path, "wb") as f:
+        f.write(word_buffer.getvalue())
+
 
 # ------------------ INTERFAZ DE USUARIO ------------------ #
 def pantalla_login():
@@ -144,6 +162,10 @@ def pantalla_gestion():
                 st.error(str(e))
         else:
             st.warning("Debes completar todos los campos")
+    if st.button("Generar Informe"):
+        print("botonaco")
+        generar_informe(centro_id)
+
 
 # ------------------ FLUJO PRINCIPAL ------------------ #
 # Cargar el estado al inicio
