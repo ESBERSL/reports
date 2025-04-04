@@ -14,7 +14,7 @@ st.set_page_config(
 )
 
 st.markdown("""
-# 📌 Gestión de Centros Educativos
+# Gestión de Edificios
 Aplicación de Gestión de Edificios para mantenimientos eléctricos de ESBER SL
 s""")
 
