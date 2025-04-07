@@ -247,6 +247,7 @@ def pantalla_gestion():
         if st.button("Volver al listado"):
             st.session_state["pagina"] = "inicio"
             st.session_state["centro_seleccionado"] = None
+            guardar_estado_sesion(st.session_state["usuario"],st.session_state["pagina"],st.session_state["centro_seleccionado"])
             st.rerun()
     
     with col3: 
