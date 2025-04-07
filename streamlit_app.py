@@ -2,8 +2,7 @@ import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
 import bcrypt
-from datetime import datetime,timezone, timedelta
-import time
+from datetime import datetime,timezone
 from informes import obtener_word_tierras
 from informes import obtener_word_aislamientos
 import streamlit_cookies_manager as cookies_manager
@@ -124,10 +123,11 @@ def pantalla_inicio():
         df_centros = df_centros[df_centros["nombre"].str.contains(busqueda, case=False, na=False)]
 
     for _, row in df_centros.iterrows():
-        if st.button(f"Gestionar {row['nombre']}"):
+        if st.button(f"Seleccionar {row['nombre']}"):
             st.session_state["centro_seleccionado"] = row["id"]
             st.session_state["nombre_centro"] = row["nombre"]
             st.session_state["pagina"] = "gestion"
+            st.session_state["subpagina"] = None
             guardar_estado_sesion(st.session_state["usuario"], "gestion", row["id"])
             st.rerun()
 
@@ -143,22 +143,8 @@ def actualizar_cuadro(cuadro_id, tierra, aislamiento, usuario):
       
     }
     supabase.table('cuadros').update(data).eq('id', cuadro_id).execute()
-
-def pantalla_gestion():
+def pantalla_mediciones():   
     centro_id = st.session_state["centro_seleccionado"]
-    nomb=st.session_state["nombre_centro"]
-    st.title(f"Gestión del Centro {nomb}")
-    
-
-    if st.button("Cerrar sesión"):
-        cerrar_sesion()
-        st.rerun()
-    
-    if st.button("Volver al listado"):
-        st.session_state["pagina"] = "inicio"
-        st.session_state["centro_seleccionado"] = None
-        st.rerun()
-
     df_cuadros = obtener_cuadros(centro_id)
     if not df_cuadros.empty:
     # Filtramos filas que tengan fecha válida
@@ -245,7 +231,55 @@ def pantalla_gestion():
 
     with col2:
         if st.button("Generar Informe Aislamientos"):
-            obtener_word_aislamientos(centro_id)        
+            obtener_word_aislamientos(centro_id) 
+
+def pantalla_defectos():
+    st.subheader("Gestión de Defectos")
+    st.info("Aquí irá la funcionalidad para gestionar los defectos de los cuadros eléctricos.")
+
+def pantalla_gestion(): 
+    col1, col2, col3 = st.columns(3)
+    with col1:     
+        if st.button("Cerrar sesión"):
+            cerrar_sesion()
+            st.rerun()         
+    with col2:
+        if st.button("Volver al listado"):
+            st.session_state["pagina"] = "inicio"
+            st.session_state["centro_seleccionado"] = None
+            st.rerun()
+    
+    with col3: 
+        if not st.session_state["subpagina"] == None:
+            if st.button("Volver al selector de gestión"):
+                st.session_state["pagina"] = "gestion"
+                st.session_state["subpagina"] = None
+                st.rerun()       
+    # Selector de gestion
+    
+    if st.session_state["subpagina"] == "mediciones":
+        pantalla_mediciones()
+    elif st.session_state["subpagina"] == "defectos":
+        pantalla_defectos()
+    else:    
+        col1, col2, col3 = st.columns([1, 3, 1]) 
+
+        with col2:
+            st.subheader(st.session_state["nombre_centro"])
+        
+
+        col1, col2, col3, col4, col5 = st.columns([1, 1, 2, 1, 1]) 
+
+        with col3:
+            if st.button("Gestionar Mediciones"):
+                st.session_state["subpagina"] = "mediciones"
+                st.rerun()
+            if st.button("Gestionar Defectos"):
+                st.session_state["subpagina"] = "defectos"
+                st.rerun()
+
+    
+      
     
         
 
