@@ -76,30 +76,16 @@ def guardar_estado_sesion(username, pagina, centro_id):
     cookies["pagina"] = pagina
     cookies["centro_seleccionado"] = centro_id
     cookies["timestamp"] = datetime.now(timezone.utc).isoformat()
-    cookies.save(
-    same_site="None",  # Necesario para cookies de terceros
-    secure=True         # Asegura que las cookies solo se envíen a través de HTTPS
-    )
-
-def recuperar_sesion_si_existe():
-    if "usuario" in cookies:
-        username = cookies["usuario"]
-        response = supabase.table("sesiones").select("*").eq("username", username).execute()
-        if response.data:
-            sesion = response.data[0]
-            timestamp = datetime.fromisoformat(sesion["timestamp"].replace("Z", "+00:00"))
-            if datetime.now(timezone.utc) - timestamp < timedelta(hours=8):
-                st.session_state["autenticado"] = True
-                st.session_state["usuario"] = username
-                st.session_state["pagina"] = sesion.get("pagina", "inicio")
-                st.session_state["centro_seleccionado"] = sesion.get("centro_seleccionado", None)
-
+    cookies.save()
 
 
 def cerrar_sesion():
     supabase.table("sesiones").delete().eq("username", st.session_state["usuario"]).execute()
     cookies.clear()  # Limpiar las cookies)
     st.session_state.clear()  # Limpiar el estado de la sesión
+    cookies["logout"] = True
+    cookies.save()
+    st.session_state["logout_forzado"] = True
     st.rerun()
 
 # ------------------ INTERFAZ DE USUARIO ------------------ #
@@ -124,6 +110,7 @@ def pantalla_inicio():
     if st.button("Cerrar sesión"):
         cerrar_sesion()
         st.rerun()
+
     
     provincia = st.selectbox("Filtrar por provincia", ["Todas", "Alicante", "Valencia", "Castellón"])
     busqueda = st.text_input("Buscar centro")
@@ -241,27 +228,35 @@ def pantalla_gestion():
 
 if 'autenticado' not in st.session_state:
     st.session_state['autenticado'] = False
- 
-if not st.session_state['autenticado']:
-    time.sleep(2) 
-    if cookies.get("usuario"):
-        username = cookies.get('usuario')
-        if username:
-            # Comprobar si tiene sesión guardada reciente
-            resp = supabase.table("sesiones").select("*").eq("username", username).execute()
-            if resp.data:
-                sesion = resp.data[0]
-                x = supabase.table("centros").select("*").eq("id", sesion["centro_seleccionado"]).execute()
-                cent = x.data[0]
-                print (cent["nombre"])
-                ahora = datetime.now(timezone.utc)
-                ultima = datetime.fromisoformat(sesion["timestamp"])
-                if (ahora - ultima).total_seconds() <= 8 * 3600:  # 8 horas
-                    st.session_state['autenticado'] = True
-                    st.session_state['usuario'] = username
-                    st.session_state['pagina'] = sesion["pagina"]
-                    st.session_state['centro_seleccionado'] = sesion["centro_seleccionado"] 
-                    st.session_state['nombre_centro'] = cent["nombre"]
+
+if "logout_forzado" in st.session_state:
+    st.session_state.pop("logout_forzado")
+else:
+    if not cookies.ready():
+        st.info("Cargando sesión... refresque la página si tarda mucho.")
+        st.stop()
+
+    if not st.session_state['autenticado']:
+        if "usuario" in cookies:
+            username = cookies.get('usuario')
+            if username:
+                    # Comprobar si tiene sesión guardada reciente
+                    resp = supabase.table("sesiones").select("*").eq("username", username).execute()
+                    if resp.data:
+                        sesion = resp.data[0]
+                        if sesion["centro_seleccionado"] is not None:
+                            x = supabase.table("centros").select("*").eq("id", sesion["centro_seleccionado"]).execute()
+                            cent = x.data[0]
+                            print (cent["nombre"])
+                        ahora = datetime.now(timezone.utc)
+                        ultima = datetime.fromisoformat(sesion["timestamp"])
+                        if (ahora - ultima).total_seconds() <= 8 * 3600:  # 8 horas
+                            st.session_state['autenticado'] = True
+                            st.session_state['usuario'] = username
+                            st.session_state['pagina'] = sesion["pagina"]
+                            st.session_state['centro_seleccionado'] = sesion["centro_seleccionado"] 
+                            if sesion["centro_seleccionado"] is not None:
+                                st.session_state['nombre_centro'] = cent["nombre"]
 
 if not st.session_state['autenticado']:
     pantalla_login()
