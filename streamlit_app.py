@@ -58,7 +58,20 @@ def agregar_cuadro(centro_id, tipo, nombre, numero, usuario):
     response = supabase.table('cuadros').insert(data).execute()
     return response
 
+# Función para guardar estado sesión
+def guardar_estado_sesion(username, pagina, centro_id):
+    data = {
+        "username": username,
+        "pagina": pagina,
+        "centro_seleccionado": centro_id,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+    supabase.table("sesiones").upsert(data, on_conflict=["username"]).execute()
 
+def cerrar_sesion():
+    supabase.table("sesiones").delete().eq("username", st.session_state["usuario"]).execute()
+    cerrar_sesion()
+    st.rerun()
 
 # ------------------ INTERFAZ DE USUARIO ------------------ #
 def pantalla_login():
@@ -71,6 +84,8 @@ def pantalla_login():
             st.session_state['autenticado'] = True
             st.session_state['usuario'] = username
             st.session_state['pagina'] = "inicio"
+            guardar_estado_sesion(username, "inicio", None)
+            st.session_state["usuario_persistente"] = username
             st.rerun()
         else:
             st.error("Usuario o contraseña incorrectos")
@@ -79,7 +94,7 @@ def pantalla_inicio():
     st.title("Lista de Centros")
     
     if st.button("Cerrar sesión"):
-        st.session_state.clear()
+        cerrar_sesion()
         st.rerun()
     
     provincia = st.selectbox("Filtrar por provincia", ["Todas", "Alicante", "Valencia", "Castellón"])
@@ -98,6 +113,7 @@ def pantalla_inicio():
             st.session_state["centro_seleccionado"] = row["id"]
             st.session_state["nombre_centro"] = row["nombre"]
             st.session_state["pagina"] = "gestion"
+            guardar_estado_sesion(st.session_state["usuario"], "gestion", row["id"])
             st.rerun()
 
 def eliminar_cuadro(cuadro_id):
@@ -109,6 +125,7 @@ def actualizar_cuadro(cuadro_id, tierra, aislamiento, usuario):
         "aislamiento_megaohmnios": aislamiento,
         "ultimo_usuario": usuario,
         "ultima_modificacion": datetime.now(timezone.utc).isoformat()
+      
     }
     supabase.table('cuadros').update(data).eq('id', cuadro_id).execute()
 
@@ -118,7 +135,7 @@ def pantalla_gestion():
     st.title(f"Gestión del Centro {nomb}")
     
     if st.button("Cerrar sesión"):
-        st.session_state.clear()
+        cerrar_sesion()
         st.rerun()
     
     if st.button("Volver al listado"):
@@ -195,6 +212,21 @@ def pantalla_gestion():
 # Cargar el estado al inicio
 if 'autenticado' not in st.session_state:
     st.session_state['autenticado'] = False
+
+if not st.session_state['autenticado']:
+    username = st.session_state.get("usuario_persistente", None)
+    if username:
+        # Comprobar si tiene sesión guardada reciente
+        resp = supabase.table("sesiones").select("*").eq("username", username).execute()
+        if resp.data:
+            sesion = resp.data[0]
+            ahora = datetime.now(timezone.utc)
+            ultima = datetime.fromisoformat(sesion["timestamp"])
+            if (ahora - ultima).total_seconds() <= 8 * 3600:  # 8 horas
+                st.session_state['autenticado'] = True
+                st.session_state['usuario'] = username
+                st.session_state['pagina'] = sesion["pagina"]
+                st.session_state['centro_seleccionado'] = sesion["centro_seleccionado"]    
 
 if not st.session_state['autenticado']:
     pantalla_login()
