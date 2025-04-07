@@ -7,3 +7,4 @@ streamlit-javascript
 python-docx
 reportlab
 pdfkit
+streamlit_cookies_manager

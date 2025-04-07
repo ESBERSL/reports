@@ -2,15 +2,19 @@ import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
 import bcrypt
-from datetime import datetime,timezone
+from datetime import datetime,timezone, timedelta
+import time
 from informes import obtener_word_tierras
 from informes import obtener_word_aislamientos
-
+import streamlit_cookies_manager as cookies_manager
 
 st.set_page_config(
     page_title="Gestión de Centros",  # Nombre de la pestaña en el navegador
     page_icon="🏢",  # Icono de la pestaña 
 )
+
+cookies = cookies_manager.CookieManager()
+
 
 # Conexión a la base de datos de Supabase
 url = st.secrets["supabase"]["SUPABASE_URL"]
@@ -66,10 +70,32 @@ def guardar_estado_sesion(username, pagina, centro_id):
         "centro_seleccionado": centro_id,
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
+    
     supabase.table("sesiones").upsert(data, on_conflict=["username"]).execute()
+    cookies["usuario"] = username
+    cookies["pagina"] = pagina
+    cookies["centro_seleccionado"] = centro_id
+    cookies["timestamp"] = datetime.now(timezone.utc).isoformat()
+    cookies.save()
+
+def recuperar_sesion_si_existe():
+    if "usuario" in cookies:
+        username = cookies["usuario"]
+        response = supabase.table("sesiones").select("*").eq("username", username).execute()
+        if response.data:
+            sesion = response.data[0]
+            timestamp = datetime.fromisoformat(sesion["timestamp"].replace("Z", "+00:00"))
+            if datetime.now(timezone.utc) - timestamp < timedelta(hours=8):
+                st.session_state["autenticado"] = True
+                st.session_state["usuario"] = username
+                st.session_state["pagina"] = sesion.get("pagina", "inicio")
+                st.session_state["centro_seleccionado"] = sesion.get("centro_seleccionado", None)
+
+
 
 def cerrar_sesion():
     supabase.table("sesiones").delete().eq("username", st.session_state["usuario"]).execute()
+    cookies.clear()  # Limpiar las cookies
     cerrar_sesion()
     st.rerun()
 
@@ -85,7 +111,6 @@ def pantalla_login():
             st.session_state['usuario'] = username
             st.session_state['pagina'] = "inicio"
             guardar_estado_sesion(username, "inicio", None)
-            st.session_state["usuario_persistente"] = username
             st.rerun()
         else:
             st.error("Usuario o contraseña incorrectos")
@@ -210,23 +235,29 @@ def pantalla_gestion():
 
 # ------------------ FLUJO PRINCIPAL ------------------ #
 # Cargar el estado al inicio
+
 if 'autenticado' not in st.session_state:
     st.session_state['autenticado'] = False
-
+ 
 if not st.session_state['autenticado']:
-    username = st.session_state.get("usuario_persistente", None)
+    time.sleep(1) 
+    username = cookies.get("usuario")
     if username:
         # Comprobar si tiene sesión guardada reciente
         resp = supabase.table("sesiones").select("*").eq("username", username).execute()
         if resp.data:
             sesion = resp.data[0]
+            x = supabase.table("centros").select("*").eq("id", sesion["centro_seleccionado"]).execute()
+            cent = x.data[0]
+            print (cent["nombre"])
             ahora = datetime.now(timezone.utc)
             ultima = datetime.fromisoformat(sesion["timestamp"])
             if (ahora - ultima).total_seconds() <= 8 * 3600:  # 8 horas
                 st.session_state['autenticado'] = True
                 st.session_state['usuario'] = username
                 st.session_state['pagina'] = sesion["pagina"]
-                st.session_state['centro_seleccionado'] = sesion["centro_seleccionado"]    
+                st.session_state['centro_seleccionado'] = sesion["centro_seleccionado"] 
+                st.session_state['nombre_centro'] = cent["nombre"]
 
 if not st.session_state['autenticado']:
     pantalla_login()
