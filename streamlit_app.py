@@ -242,7 +242,7 @@ if 'autenticado' not in st.session_state:
     st.session_state['autenticado'] = False
  
 if not st.session_state['autenticado']:
-    time.sleep(1) 
+    time.sleep(2) 
     if cookies.get("usuario"):
         username = cookies.get('usuario')
         if username:
