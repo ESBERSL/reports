@@ -95,8 +95,7 @@ def recuperar_sesion_si_existe():
 
 def cerrar_sesion():
     supabase.table("sesiones").delete().eq("username", st.session_state["usuario"]).execute()
-    cookies.clear()  # Limpiar las cookies
-    cerrar_sesion()
+    cookies.clear()  # Limpiar las cookies)
     st.rerun()
 
 # ------------------ INTERFAZ DE USUARIO ------------------ #
