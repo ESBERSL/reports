@@ -2,15 +2,19 @@ import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
 import bcrypt
-from datetime import datetime,timezone
+from datetime import datetime,timezone, timedelta
+import time
 from informes import obtener_word_tierras
 from informes import obtener_word_aislamientos
-
+import streamlit_cookies_manager as cookies_manager
 
 st.set_page_config(
     page_title="Gestión de Centros",  # Nombre de la pestaña en el navegador
     page_icon="🏢",  # Icono de la pestaña 
 )
+
+cookies = cookies_manager.CookieManager()
+
 
 # Conexión a la base de datos de Supabase
 url = st.secrets["supabase"]["SUPABASE_URL"]
@@ -58,7 +62,31 @@ def agregar_cuadro(centro_id, tipo, nombre, numero, usuario):
     response = supabase.table('cuadros').insert(data).execute()
     return response
 
+# Función para guardar estado sesión
+def guardar_estado_sesion(username, pagina, centro_id):
+    data = {
+        "username": username,
+        "pagina": pagina,
+        "centro_seleccionado": centro_id,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+    
+    supabase.table("sesiones").upsert(data, on_conflict=["username"]).execute()
+    cookies["usuario"] = username
+    cookies["pagina"] = pagina
+    cookies["centro_seleccionado"] = centro_id
+    cookies["timestamp"] = datetime.now(timezone.utc).isoformat()
+    cookies.save()
 
+
+def cerrar_sesion():
+    supabase.table("sesiones").delete().eq("username", st.session_state["usuario"]).execute()
+    cookies.clear()  # Limpiar las cookies)
+    st.session_state.clear()  # Limpiar el estado de la sesión
+    cookies["logout"] = True
+    cookies.save()
+    st.session_state["logout_forzado"] = True
+    st.rerun()
 
 # ------------------ INTERFAZ DE USUARIO ------------------ #
 def pantalla_login():
@@ -71,6 +99,7 @@ def pantalla_login():
             st.session_state['autenticado'] = True
             st.session_state['usuario'] = username
             st.session_state['pagina'] = "inicio"
+            guardar_estado_sesion(username, "inicio", None)
             st.rerun()
         else:
             st.error("Usuario o contraseña incorrectos")
@@ -79,8 +108,9 @@ def pantalla_inicio():
     st.title("Lista de Centros")
     
     if st.button("Cerrar sesión"):
-        st.session_state.clear()
+        cerrar_sesion()
         st.rerun()
+
     
     provincia = st.selectbox("Filtrar por provincia", ["Todas", "Alicante", "Valencia", "Castellón"])
     busqueda = st.text_input("Buscar centro")
@@ -98,6 +128,7 @@ def pantalla_inicio():
             st.session_state["centro_seleccionado"] = row["id"]
             st.session_state["nombre_centro"] = row["nombre"]
             st.session_state["pagina"] = "gestion"
+            guardar_estado_sesion(st.session_state["usuario"], "gestion", row["id"])
             st.rerun()
 
 def eliminar_cuadro(cuadro_id):
@@ -109,6 +140,7 @@ def actualizar_cuadro(cuadro_id, tierra, aislamiento, usuario):
         "aislamiento_megaohmnios": aislamiento,
         "ultimo_usuario": usuario,
         "ultima_modificacion": datetime.now(timezone.utc).isoformat()
+      
     }
     supabase.table('cuadros').update(data).eq('id', cuadro_id).execute()
 
@@ -117,8 +149,9 @@ def pantalla_gestion():
     nomb=st.session_state["nombre_centro"]
     st.title(f"Gestión del Centro {nomb}")
     
+
     if st.button("Cerrar sesión"):
-        st.session_state.clear()
+        cerrar_sesion()
         st.rerun()
     
     if st.button("Volver al listado"):
@@ -127,10 +160,36 @@ def pantalla_gestion():
         st.rerun()
 
     df_cuadros = obtener_cuadros(centro_id)
-        
+    if not df_cuadros.empty:
+    # Filtramos filas que tengan fecha válida
+        df_cuadros = df_cuadros.dropna(subset=["ultima_modificacion"])
+    if not df_cuadros.empty:
+        # Convertimos a datetime y buscamos la más reciente
+        df_cuadros["ultima_modificacion"] = pd.to_datetime(df_cuadros["ultima_modificacion"])
+        cuadro_reciente = df_cuadros.sort_values("ultima_modificacion", ascending=False).iloc[0]
+        fecha_hora_mod = cuadro_reciente["ultima_modificacion"].strftime("%d/%m/%Y a las %H:%M")
+        st.write(f"Última modificación por: {cuadro_reciente['ultimo_usuario']} el: {fecha_hora_mod}")
+
     for _, row in df_cuadros.iterrows():
         cuadro_id = row['id']
         st.subheader(f"Cuadro: {row['nombre']}")
+        with st.expander("Editar cuadro"):
+            nuevo_tipo = st.selectbox("Tipo", ["CGBT", "CS", "CT", "CC"], index=["CGBT", "CS", "CT", "CC"].index(row["tipo"]), key=f"edit_tipo_{cuadro_id}")
+            nuevo_numero = st.number_input("Número", value=row["numero"], min_value=0, max_value=100, key=f"edit_numero_{cuadro_id}")
+            nuevo_nombre = st.text_input("Nombre", value=row["nombre"], key=f"edit_nombre_{cuadro_id}")
+            
+            if st.button("Guardar cambios", key=f"guardar_edicion_{cuadro_id}"):
+                actualizar_datos = {
+                    "tipo": nuevo_tipo,
+                    "numero": nuevo_numero,
+                    "nombre": nuevo_nombre,
+                    "ultimo_usuario": st.session_state["usuario"],
+                    "ultima_modificacion": datetime.now(timezone.utc).isoformat()
+                }
+                supabase.table('cuadros').update(actualizar_datos).eq('id', cuadro_id).execute()
+                st.success("Cuadro actualizado correctamente.")
+                st.rerun()
+        
 
         # Campos de entrada únicos
         tierra = st.number_input(
@@ -193,8 +252,38 @@ def pantalla_gestion():
 
 # ------------------ FLUJO PRINCIPAL ------------------ #
 # Cargar el estado al inicio
+
 if 'autenticado' not in st.session_state:
     st.session_state['autenticado'] = False
+
+if "logout_forzado" in st.session_state:
+    st.session_state.pop("logout_forzado")
+else:
+    if not cookies.ready():
+        st.info("Cargando sesión... refresque la página si tarda mucho.")
+        st.stop()
+
+    if not st.session_state['autenticado']:
+        if "usuario" in cookies:
+            username = cookies.get('usuario')
+            if username:
+                    # Comprobar si tiene sesión guardada reciente
+                    resp = supabase.table("sesiones").select("*").eq("username", username).execute()
+                    if resp.data:
+                        sesion = resp.data[0]
+                        if sesion["centro_seleccionado"] is not None:
+                            x = supabase.table("centros").select("*").eq("id", sesion["centro_seleccionado"]).execute()
+                            cent = x.data[0]
+                            print (cent["nombre"])
+                        ahora = datetime.now(timezone.utc)
+                        ultima = datetime.fromisoformat(sesion["timestamp"])
+                        if (ahora - ultima).total_seconds() <= 8 * 3600:  # 8 horas
+                            st.session_state['autenticado'] = True
+                            st.session_state['usuario'] = username
+                            st.session_state['pagina'] = sesion["pagina"]
+                            st.session_state['centro_seleccionado'] = sesion["centro_seleccionado"] 
+                            if sesion["centro_seleccionado"] is not None:
+                                st.session_state['nombre_centro'] = cent["nombre"]
 
 if not st.session_state['autenticado']:
     pantalla_login()
