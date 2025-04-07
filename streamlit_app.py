@@ -76,7 +76,10 @@ def guardar_estado_sesion(username, pagina, centro_id):
     cookies["pagina"] = pagina
     cookies["centro_seleccionado"] = centro_id
     cookies["timestamp"] = datetime.now(timezone.utc).isoformat()
-    cookies.save()
+    cookies.save(
+    same_site="None",  # Necesario para cookies de terceros
+    secure=True         # Asegura que las cookies solo se envíen a través de HTTPS
+    )
 
 def recuperar_sesion_si_existe():
     if "usuario" in cookies:
