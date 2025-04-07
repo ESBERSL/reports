@@ -149,6 +149,7 @@ def pantalla_gestion():
     nomb=st.session_state["nombre_centro"]
     st.title(f"Gestión del Centro {nomb}")
     
+
     if st.button("Cerrar sesión"):
         cerrar_sesion()
         st.rerun()
@@ -159,10 +160,36 @@ def pantalla_gestion():
         st.rerun()
 
     df_cuadros = obtener_cuadros(centro_id)
-        
+    if not df_cuadros.empty:
+    # Filtramos filas que tengan fecha válida
+        df_cuadros = df_cuadros.dropna(subset=["ultima_modificacion"])
+    if not df_cuadros.empty:
+        # Convertimos a datetime y buscamos la más reciente
+        df_cuadros["ultima_modificacion"] = pd.to_datetime(df_cuadros["ultima_modificacion"])
+        cuadro_reciente = df_cuadros.sort_values("ultima_modificacion", ascending=False).iloc[0]
+        fecha_hora_mod = cuadro_reciente["ultima_modificacion"].strftime("%d/%m/%Y a las %H:%M")
+        st.write(f"Última modificación por: {cuadro_reciente['ultimo_usuario']} el: {fecha_hora_mod}")
+
     for _, row in df_cuadros.iterrows():
         cuadro_id = row['id']
         st.subheader(f"Cuadro: {row['nombre']}")
+        with st.expander("Editar cuadro"):
+            nuevo_tipo = st.selectbox("Tipo", ["CGBT", "CS", "CT", "CC"], index=["CGBT", "CS", "CT", "CC"].index(row["tipo"]), key=f"edit_tipo_{cuadro_id}")
+            nuevo_numero = st.number_input("Número", value=row["numero"], min_value=0, max_value=100, key=f"edit_numero_{cuadro_id}")
+            nuevo_nombre = st.text_input("Nombre", value=row["nombre"], key=f"edit_nombre_{cuadro_id}")
+            
+            if st.button("Guardar cambios", key=f"guardar_edicion_{cuadro_id}"):
+                actualizar_datos = {
+                    "tipo": nuevo_tipo,
+                    "numero": nuevo_numero,
+                    "nombre": nuevo_nombre,
+                    "ultimo_usuario": st.session_state["usuario"],
+                    "ultima_modificacion": datetime.now(timezone.utc).isoformat()
+                }
+                supabase.table('cuadros').update(actualizar_datos).eq('id', cuadro_id).execute()
+                st.success("Cuadro actualizado correctamente.")
+                st.rerun()
+        
 
         # Campos de entrada únicos
         tierra = st.number_input(
