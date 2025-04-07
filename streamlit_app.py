@@ -241,23 +241,24 @@ if 'autenticado' not in st.session_state:
  
 if not st.session_state['autenticado']:
     time.sleep(1) 
-    username = cookies.get("usuario")
-    if username:
-        # Comprobar si tiene sesión guardada reciente
-        resp = supabase.table("sesiones").select("*").eq("username", username).execute()
-        if resp.data:
-            sesion = resp.data[0]
-            x = supabase.table("centros").select("*").eq("id", sesion["centro_seleccionado"]).execute()
-            cent = x.data[0]
-            print (cent["nombre"])
-            ahora = datetime.now(timezone.utc)
-            ultima = datetime.fromisoformat(sesion["timestamp"])
-            if (ahora - ultima).total_seconds() <= 8 * 3600:  # 8 horas
-                st.session_state['autenticado'] = True
-                st.session_state['usuario'] = username
-                st.session_state['pagina'] = sesion["pagina"]
-                st.session_state['centro_seleccionado'] = sesion["centro_seleccionado"] 
-                st.session_state['nombre_centro'] = cent["nombre"]
+    if cookies.get("usuario"):
+        username = cookies.get('usuario')
+        if username:
+            # Comprobar si tiene sesión guardada reciente
+            resp = supabase.table("sesiones").select("*").eq("username", username).execute()
+            if resp.data:
+                sesion = resp.data[0]
+                x = supabase.table("centros").select("*").eq("id", sesion["centro_seleccionado"]).execute()
+                cent = x.data[0]
+                print (cent["nombre"])
+                ahora = datetime.now(timezone.utc)
+                ultima = datetime.fromisoformat(sesion["timestamp"])
+                if (ahora - ultima).total_seconds() <= 8 * 3600:  # 8 horas
+                    st.session_state['autenticado'] = True
+                    st.session_state['usuario'] = username
+                    st.session_state['pagina'] = sesion["pagina"]
+                    st.session_state['centro_seleccionado'] = sesion["centro_seleccionado"] 
+                    st.session_state['nombre_centro'] = cent["nombre"]
 
 if not st.session_state['autenticado']:
     pantalla_login()
