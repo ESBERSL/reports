@@ -62,12 +62,13 @@ def agregar_cuadro(centro_id, tipo, nombre, numero, usuario):
     return response
 
 # Función para guardar estado sesión
-def guardar_estado_sesion(username, pagina, centro_id):
+def guardar_estado_sesion(username, pagina, centro_id, subpagina):
     data = {
         "username": username,
         "pagina": pagina,
         "centro_seleccionado": centro_id,
-        "timestamp": datetime.now(timezone.utc).isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "subpagina": subpagina
     }
     
     supabase.table("sesiones").upsert(data, on_conflict=["username"]).execute()
@@ -75,6 +76,7 @@ def guardar_estado_sesion(username, pagina, centro_id):
     cookies["pagina"] = pagina
     cookies["centro_seleccionado"] = centro_id
     cookies["timestamp"] = datetime.now(timezone.utc).isoformat()
+    cookies["subpagina"] = subpagina
     cookies.save()
 
 
@@ -98,7 +100,7 @@ def pantalla_login():
             st.session_state['autenticado'] = True
             st.session_state['usuario'] = username
             st.session_state['pagina'] = "inicio"
-            guardar_estado_sesion(username, "inicio", None)
+            guardar_estado_sesion(username, "inicio", None, None)
             st.rerun()
         else:
             st.error("Usuario o contraseña incorrectos")
@@ -128,7 +130,7 @@ def pantalla_inicio():
             st.session_state["nombre_centro"] = row["nombre"]
             st.session_state["pagina"] = "gestion"
             st.session_state["subpagina"] = None
-            guardar_estado_sesion(st.session_state["usuario"], "gestion", row["id"])
+            guardar_estado_sesion(st.session_state["usuario"], "gestion", row["id"], None)
             st.rerun()
 
 def eliminar_cuadro(cuadro_id):
@@ -143,7 +145,8 @@ def actualizar_cuadro(cuadro_id, tierra, aislamiento, usuario):
       
     }
     supabase.table('cuadros').update(data).eq('id', cuadro_id).execute()
-def pantalla_mediciones():   
+def pantalla_mediciones():
+    guardar_estado_sesion(st.session_state["usuario"],st.session_state["pagina"],st.session_state["centro_seleccionado"], "mediciones")   
     centro_id = st.session_state["centro_seleccionado"]
     df_cuadros = obtener_cuadros(centro_id)
     if not df_cuadros.empty:
@@ -234,8 +237,88 @@ def pantalla_mediciones():
             obtener_word_aislamientos(centro_id) 
 
 def pantalla_defectos():
-    st.subheader("Gestión de Defectos")
-    st.info("Aquí irá la funcionalidad para gestionar los defectos de los cuadros eléctricos.")
+    guardar_estado_sesion(st.session_state["usuario"],st.session_state["pagina"],st.session_state["centro_seleccionado"], "defectos")
+    centro_id = st.session_state["centro_seleccionado"]
+    nomb = st.session_state["nombre_centro"]
+    st.title(f"Gestión de Defectos del Centro {nomb}")
+
+    df_cuadros = obtener_cuadros(centro_id)
+    
+    if not df_cuadros.empty:
+        for _, row in df_cuadros.iterrows():
+            cuadro_id = row['id']
+            st.subheader(f"Cuadro: {row['nombre']}")
+            
+            with st.expander("Editar cuadro"):
+                nuevo_tipo = st.selectbox("Tipo", ["CGBT", "CS", "CT", "CC"], index=["CGBT", "CS", "CT", "CC"].index(row["tipo"]), key=f"edit_tipo_{cuadro_id}")
+                nuevo_numero = st.number_input("Número", value=row["numero"], min_value=0, max_value=100, key=f"edit_numero_{cuadro_id}")
+                nuevo_nombre = st.text_input("Nombre", value=row["nombre"], key=f"edit_nombre_{cuadro_id}")
+                
+                if st.button("Guardar cambios", key=f"guardar_edicion_{cuadro_id}"):
+                    actualizar_datos = {
+                        "tipo": nuevo_tipo,
+                        "numero": nuevo_numero,
+                        "nombre": nuevo_nombre,
+                        "ultimo_usuario": st.session_state["usuario"],
+                        "ultima_modificacion": datetime.now(timezone.utc).isoformat()
+                    }
+                    supabase.table('cuadros').update(actualizar_datos).eq('id', cuadro_id).execute()
+                    st.success("Cuadro actualizado correctamente.")
+                    st.rerun()
+
+            # Agregar el checklist de defectos
+            st.write("Defectos actuales:")
+
+            defectos = ["Defecto 1", "Defecto 2", "Defecto 3", "Defecto 4", "Defecto 5"]  # Lista de defectos predefinidos
+
+            # Asegurarse de que row["defectos"] sea una lista, aunque si es None
+            defectos_registrados = row.get("defectos", [])
+            if defectos_registrados is None:
+                defectos_registrados = []
+
+            seleccionados = []
+            for defecto in defectos:
+                # Cada checkbox ahora tiene un key único
+                seleccionados.append(st.checkbox(defecto, key=f"defecto_{cuadro_id}_{defecto}", value=defecto in defectos_registrados))
+
+            if st.button(f"Guardar defectos para cuadro {cuadro_id}", key=f"guardar_defectos_{cuadro_id}"):
+                # Actualizamos los defectos seleccionados
+                defectos_seleccionados = [defecto for defecto, seleccionado in zip(defectos, seleccionados) if seleccionado]
+                actualizar_defectos(cuadro_id, defectos_seleccionados)
+                st.success("Defectos actualizados correctamente.")
+                st.rerun()
+
+            # Campos para eliminar el cuadro
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                if st.button(f"Eliminar cuadro {cuadro_id}", key=f"eliminar_btn_{cuadro_id}"):
+                    eliminar_cuadro(cuadro_id)
+                    st.success(f"Cuadro '{row['nombre']}' eliminado.")
+                    st.rerun()
+
+    # Opción para agregar nuevos cuadros
+    st.subheader("Añadir Cuadro Eléctrico")
+    tipo = st.selectbox("Tipo", ["CGBT", "CS", "CT", "CC"], key="tipo_nuevo")
+    numero = st.number_input("Número del cuadro", key="numero_nuevo", min_value=0, max_value=100, step=1) 
+    nombre = st.text_input("Nombre del cuadro", key="nombre_nuevo")
+    usuario = st.session_state['usuario']
+    
+    if st.button("Añadir Cuadro", key="añadir_cuadro"):
+        if nombre:
+            try:
+                agregar_cuadro(centro_id, tipo, nombre, numero, usuario)
+                st.rerun()
+            except ValueError as e:
+                st.error(str(e))
+        else:
+            st.warning("Debes completar todos los campos")
+    
+def actualizar_defectos(cuadro_id, defectos_seleccionados):
+    # Convertir la lista de defectos a formato adecuado para almacenar en la base de datos
+    defectos_string = ",".join(defectos_seleccionados)
+    
+    # Actualizar la base de datos con los defectos
+    supabase.table('cuadros').update({"defectos": defectos_string}).eq('id', cuadro_id).execute()
 
 def pantalla_gestion(): 
     col1, col2, col3 = st.columns(3)
@@ -247,7 +330,7 @@ def pantalla_gestion():
         if st.button("Volver al listado"):
             st.session_state["pagina"] = "inicio"
             st.session_state["centro_seleccionado"] = None
-            guardar_estado_sesion(st.session_state["usuario"],st.session_state["pagina"],st.session_state["centro_seleccionado"])
+            guardar_estado_sesion(st.session_state["usuario"],st.session_state["pagina"],st.session_state["centro_seleccionado"], None)
             st.rerun()
     
     with col3: 
@@ -290,6 +373,7 @@ def pantalla_gestion():
 
 if 'autenticado' not in st.session_state:
     st.session_state['autenticado'] = False
+    st.session_state['subpagina'] = None
 
 if "logout_forzado" in st.session_state:
     st.session_state.pop("logout_forzado")
@@ -314,6 +398,8 @@ else:
                         ultima = datetime.fromisoformat(sesion["timestamp"])
                         if (ahora - ultima).total_seconds() <= 8 * 3600:  # 8 horas
                             st.session_state['autenticado'] = True
+                            st.session_state['subpagina'] = sesion["subpagina"]
+                            st.session_state['centro_seleccionado'] = sesion["centro_seleccionado"]
                             st.session_state['usuario'] = username
                             st.session_state['pagina'] = sesion["pagina"]
                             st.session_state['centro_seleccionado'] = sesion["centro_seleccionado"] 
