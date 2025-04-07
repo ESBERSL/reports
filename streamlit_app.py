@@ -3,7 +3,8 @@ from supabase import create_client, Client
 import pandas as pd
 import bcrypt
 from datetime import datetime,timezone
-from informes import obtener_word
+from informes import obtener_word_tierras
+from informes import obtener_word_aislamientos
 
 
 st.set_page_config(
@@ -177,8 +178,16 @@ def pantalla_gestion():
                 st.error(str(e))
         else:
             st.warning("Debes completar todos los campos")
-    if st.button("Generar Informe"):
-        obtener_word(centro_id)
+    col1, col2 = st.columns([1, 1])
+
+    with col1:
+        if st.button("Generar Informe Tierras"):
+            obtener_word_tierras(centro_id)
+
+    with col2:
+        if st.button("Generar Informe Aislamientos"):
+            obtener_word_aislamientos(centro_id)        
+    
         
 
 
