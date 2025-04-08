@@ -38,14 +38,14 @@ def obtener_centros():
 def obtener_cuadros(centro_id):
     return pd.DataFrame(supabase.table('cuadros').select('*').eq('centro_id', centro_id).execute().data)
 
-def agregar_cuadro(centro_id, tipo, nombre, numero, usuario):
+def agregar_cuadro(centro_id, tipo, nombre, numero, usuario, tierra, aislamiento):
     data = {
         "centro_id": centro_id,
         "tipo": tipo,
         "nombre": nombre,
         "numero": numero,
-        "tierra_ohmnios": None,
-        "aislamiento_megaohmnios": None,
+        "tierra_ohmnios": tierra,
+        "aislamiento_megaohmnios": aislamiento,
         "ultimo_usuario": usuario,
         "ultima_modificacion": ahora_es().isoformat()
     }
@@ -235,7 +235,7 @@ def pantalla_gestion():
     if st.button("Añadir Cuadro"):
         if nombre:
             try:
-                agregar_cuadro(centro_id, tipo, nombre, numero, usuario)
+                agregar_cuadro(centro_id, tipo, nombre, numero, usuario, tierra, aislamiento)
                 st.rerun()
             except ValueError as e:
                 st.error(str(e))
