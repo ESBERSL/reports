@@ -143,10 +143,10 @@ def pantalla_gestion():
     df_cuadros = obtener_cuadros(centro_id)
     df_cuadros = df_cuadros.dropna(subset=["ultima_modificacion"])
     if not df_cuadros.empty and "ultima_modificacion" in df_cuadros.columns:
-        df_cuadros_filtrado = df_cuadros.dropna(subset=["ultima_modificacion"])
-    if not df_cuadros_filtrado.empty:
-        df_cuadros_filtrado["ultima_modificacion"] = pd.to_datetime(df_cuadros_filtrado["ultima_modificacion"]).dt.tz_convert("Europe/Madrid")
-        cuadro_reciente = df_cuadros_filtrado.sort_values("ultima_modificacion", ascending=False).iloc[0]
+        df_filtrado = df_cuadros.dropna(subset=["ultima_modificacion"])
+    if not df_filtrado.empty:
+        df_filtrado["ultima_modificacion"] = pd.to_datetime(df_filtrado["ultima_modificacion"]).dt.tz_convert("Europe/Madrid")
+        cuadro_reciente = df_filtrado.sort_values("ultima_modificacion", ascending=False).iloc[0]
         fecha_hora_mod = cuadro_reciente["ultima_modificacion"].strftime("%d/%m/%Y a las %H:%M")
         st.write(f"Última modificación por: {cuadro_reciente['ultimo_usuario']} el: {fecha_hora_mod}")
 
