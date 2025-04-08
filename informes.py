@@ -99,7 +99,12 @@ def generar_informe_word_tierras(centro_id):
     # Agregar filas con los datos
     for _, row in df_cuadros.iterrows():
         row_cells = tabla.add_row().cells
-        row_cells[0].text = str(row['numero'])
+        if row['tipo'] == 'CGBT':
+            row_cells[0].text = str(row['tipo'])
+        elif row['numero']<=9:
+            row_cells[0].text = f"{str(row['tipo'])}-0{str(row['numero'])}"
+        else:
+            row_cells[0].text = f"{str(row['tipo'])}-{str(row['numero'])}" 
         row_cells[1].text = row['nombre']
         row_cells[2].text = str(row['tierra_ohmnios']) if row['tierra_ohmnios'] is not None else 'N/A'
 
@@ -197,7 +202,7 @@ def generar_informe_word_aislamientos(centro_id):
         elif row['numero']<=9:
             row_cells[0].text = f"{str(row['tipo'])}-0{str(row['numero'])}"
         else:
-            row_cells[0].text = f"{str(row['tipo'])}-{str(row['numero'])}"    
+            row_cells[0].text = f"{str(row['tipo'])}-{str(row['numero'])}"  
         row_cells[1].text = row['nombre']
         row_cells[2].text = str(row['aislamiento_megaohmnios']) if row['aislamiento_megaohmnios'] is not None else 'N/A'
 
