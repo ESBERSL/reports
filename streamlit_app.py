@@ -181,7 +181,6 @@ def pantalla_gestion():
                 st.success("Cuadro actualizado correctamente.")
                 st.rerun()
 
-        # Ahora accedemos a las mediciones solo dentro del bucle donde 'row' está definido
         tierra = st.number_input(
             "Medición de Tierra (Ω)",
             value=row["tierra_ohmnios"] or 0.0,
@@ -208,7 +207,7 @@ def pantalla_gestion():
                     eliminar_cuadro(cuadro_id)
                     st.success(f"Cuadro '{row['nombre']}' eliminado.")
                     st.rerun()
-
+    
     st.subheader("Añadir Cuadro Eléctrico")
     tipo = st.selectbox("Tipo", ["CGBT", "CS", "CT", "CC"], key="tipo")
     numero = st.number_input("Número del cuadro", key="numero", min_value=0, max_value=100, step=1) 
