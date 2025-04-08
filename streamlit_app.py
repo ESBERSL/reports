@@ -181,6 +181,7 @@ def pantalla_gestion():
                 st.success("Cuadro actualizado correctamente.")
                 st.rerun()
 
+        # Ahora accedemos a las mediciones solo dentro del bucle donde 'row' está definido
         tierra = st.number_input(
             "Medición de Tierra (Ω)",
             value=row["tierra_ohmnios"] or 0.0,
@@ -216,16 +217,16 @@ def pantalla_gestion():
     with col1:
         tierra = st.number_input(
             "Medición de Tierra (Ω)",
-            value=row["tierra_ohmnios"] or 0.0,
-            key=f"new_tierra_input_{cuadro_id}",
+            value=0.0,
+            key=f"new_tierra_input",
             min_value=0.0,
             step=1.0,
         )
     with col2:
         aislamiento = st.number_input(
             "Medición de Aislamiento (MΩ)",
-            value=row["aislamiento_megaohmnios"] or 0.0,
-            key=f"new_aislamiento_input_{cuadro_id}",
+            value=0.0,
+            key=f"new_aislamiento_input",
             min_value=0.0,
             step=1.0,
         )
