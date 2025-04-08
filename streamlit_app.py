@@ -131,20 +131,27 @@ def eliminar_cuadro(cuadro_id):
 
 def pantalla_gestion():
     centro_id = st.session_state["centro_seleccionado"]
-    st.title(f"Gestión del Centro {st.session_state['nombre_centro']}")
+    nomb = st.session_state["nombre_centro"]
+    st.title(f"Gestión del Centro {nomb}")
+
     if st.button("Cerrar sesión"):
         cerrar_sesion()
         st.rerun()
+    
     if st.button("Volver al listado"):
-        st.session_state.update({"pagina": "inicio", "centro_seleccionado": None})
-        guardar_estado_sesion(st.session_state["usuario"], "inicio", None)
+        st.session_state["pagina"] = "inicio"
+        st.session_state["centro_seleccionado"] = None
+        guardar_estado_sesion(st.session_state["usuario"], st.session_state["pagina"], st.session_state["centro_seleccionado"])
         st.rerun()
 
     df_cuadros = obtener_cuadros(centro_id)
-    df_cuadros = df_cuadros.dropna(subset=["ultima_modificacion"])
+
+    # Verificar si hay cuadros y si la columna 'ultima_modificacion' existe
     if not df_cuadros.empty and "ultima_modificacion" in df_cuadros.columns:
+        # Filtramos filas que tengan fecha válida
         df_filtrado = df_cuadros.dropna(subset=["ultima_modificacion"])
         if not df_filtrado.empty:
+            # Convertimos la fecha a zona horaria de Madrid
             df_filtrado["ultima_modificacion"] = pd.to_datetime(
                 df_filtrado["ultima_modificacion"], utc=True
             ).dt.tz_convert("Europe/Madrid")
@@ -154,59 +161,95 @@ def pantalla_gestion():
     else:
         st.write("Aún no hay cuadros creados.")
 
-
     for _, row in df_cuadros.iterrows():
         cuadro_id = row['id']
         st.subheader(f"Cuadro: {row['nombre']}")
         with st.expander("Editar cuadro"):
-            tipo = st.selectbox("Tipo", ["CGBT", "CS", "CT", "CC"], index=["CGBT", "CS", "CT", "CC"].index(row["tipo"]), key=f"tipo_{cuadro_id}")
-            numero = st.number_input("Número", value=row["numero"], min_value=0, max_value=100, key=f"numero_{cuadro_id}")
-            nombre = st.text_input("Nombre", value=row["nombre"], key=f"nombre_{cuadro_id}")
-            if st.button("Guardar cambios", key=f"guardar_{cuadro_id}"):
-                supabase.table('cuadros').update({
-                    "tipo": tipo,
-                    "numero": numero,
-                    "nombre": nombre,
+            nuevo_tipo = st.selectbox("Tipo", ["CGBT", "CS", "CT", "CC"], index=["CGBT", "CS", "CT", "CC"].index(row["tipo"]), key=f"edit_tipo_{cuadro_id}")
+            nuevo_numero = st.number_input("Número", value=row["numero"], min_value=0, max_value=100, key=f"edit_numero_{cuadro_id}")
+            nuevo_nombre = st.text_input("Nombre", value=row["nombre"], key=f"edit_nombre_{cuadro_id}")
+            
+            if st.button("Guardar cambios", key=f"guardar_edicion_{cuadro_id}"):
+                actualizar_datos = {
+                    "tipo": nuevo_tipo,
+                    "numero": nuevo_numero,
+                    "nombre": nuevo_nombre,
                     "ultimo_usuario": st.session_state["usuario"],
-                    "ultima_modificacion": ahora_es().isoformat()
-                }).eq('id', cuadro_id).execute()
+                    "ultima_modificacion": datetime.now(ZoneInfo("Europe/Madrid")).isoformat()
+                }
+                supabase.table('cuadros').update(actualizar_datos).eq('id', cuadro_id).execute()
                 st.success("Cuadro actualizado correctamente.")
                 st.rerun()
 
-        st.number_input("Medición de Tierra (Ω)", value=row["tierra_ohmnios"] or 0.0, min_value=0.0,
-                        key=f"tierra_{cuadro_id}", step=1.0,
-                        on_change=lambda cid=cuadro_id: actualizar_tierra(cid, st.session_state[f"tierra_{cid}"], st.session_state["usuario"]))
+        tierra = st.number_input(
+            "Medición de Tierra (Ω)",
+            value=row["tierra_ohmnios"] or 0.0,
+            key=f"tierra_input_{cuadro_id}",
+            min_value=0.0,
+            step=1.0,
+            on_change=lambda: actualizar_tierra(cuadro_id, st.session_state[f"tierra_input_{cuadro_id}"], st.session_state["usuario"])
+        )
+        aislamiento = st.number_input(
+            "Medición de Aislamiento (MΩ)",
+            value=row["aislamiento_megaohmnios"] or 0.0,
+            key=f"aislamiento_input_{cuadro_id}",
+            min_value=0.0,
+            step=1.0,
+            on_change=lambda: actualizar_aislamiento(cuadro_id, st.session_state[f"aislamiento_input_{cuadro_id}"], st.session_state["usuario"])
+        )
 
-        st.number_input("Medición de Aislamiento (MΩ)", value=row["aislamiento_megaohmnios"] or 0.0, min_value=0.0,
-                        key=f"aislamiento_{cuadro_id}", step=1.0,
-                        on_change=lambda cid=cuadro_id: actualizar_aislamiento(cid, st.session_state[f"aislamiento_{cid}"], st.session_state["usuario"]))
+        col1, col2 = st.columns([1, 1])
 
-        with st.expander("Eliminar cuadro", expanded=False):
-            st.warning("Esta acción no se puede deshacer.")
-            if st.button("Confirmar eliminación", key=f"eliminar_{cuadro_id}"):
-                eliminar_cuadro(cuadro_id)
-                st.success(f"Cuadro '{row['nombre']}' eliminado.")
-                st.rerun()
+        with col2:
+            with st.expander("Eliminar cuadro", expanded=False):
+                st.warning("Esta acción no se puede deshacer.")
+                if st.button("Confirmar eliminación", key=f"eliminar_btn_{cuadro_id}"):
+                    eliminar_cuadro(cuadro_id)
+                    st.success(f"Cuadro '{row['nombre']}' eliminado.")
+                    st.rerun()
 
     st.subheader("Añadir Cuadro Eléctrico")
-    tipo = st.selectbox("Tipo", ["CGBT", "CS", "CT", "CC"], key="nuevo_tipo")
-    numero = st.number_input("Número", min_value=0, max_value=100, step=1, key="nuevo_numero")
-    nombre = st.text_input("Nombre", key="nuevo_nombre")
+    tipo = st.selectbox("Tipo", ["CGBT", "CS", "CT", "CC"], key="tipo")
+    numero = st.number_input("Número del cuadro", key="numero", min_value=0, max_value=100, step=1) 
+    nombre = st.text_input("Nombre del cuadro", key="nombre")
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        tierra = st.number_input(
+            "Medición de Tierra (Ω)",
+            value=row["tierra_ohmnios"] or 0.0,
+            key=f"new_tierra_input_{cuadro_id}",
+            min_value=0.0,
+            step=1.0,
+        )
+    with col2:
+        aislamiento = st.number_input(
+            "Medición de Aislamiento (MΩ)",
+            value=row["aislamiento_megaohmnios"] or 0.0,
+            key=f"new_aislamiento_input_{cuadro_id}",
+            min_value=0.0,
+            step=1.0,
+        )
+
+    usuario = st.session_state['usuario']
     if st.button("Añadir Cuadro"):
         if nombre:
-            agregar_cuadro(centro_id, tipo, nombre, numero, st.session_state["usuario"])
-            st.rerun()
+            try:
+                agregar_cuadro(centro_id, tipo, nombre, numero, usuario)
+                st.rerun()
+            except ValueError as e:
+                st.error(str(e))
         else:
             st.warning("Debes completar todos los campos")
+    
+    col1, col2 = st.columns([1, 1])
 
-    col1, col2 = st.columns(2)
     with col1:
         if st.button("Generar Informe Tierras"):
             obtener_word_tierras(centro_id)
+
     with col2:
         if st.button("Generar Informe Aislamientos"):
             obtener_word_aislamientos(centro_id)
-
 # FLUJO PRINCIPAL
 if 'autenticado' not in st.session_state:
     st.session_state['autenticado'] = False
