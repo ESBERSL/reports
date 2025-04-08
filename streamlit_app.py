@@ -134,15 +134,23 @@ def pantalla_inicio():
 def eliminar_cuadro(cuadro_id):
     supabase.table('cuadros').delete().eq('id', cuadro_id).execute()
 
-def actualizar_cuadro(cuadro_id, tierra, aislamiento, usuario):
+def actualizar_tierra(cuadro_id, tierra, usuario):
     data = {
         "tierra_ohmnios": tierra,
-        "aislamiento_megaohmnios": aislamiento,
         "ultimo_usuario": usuario,
         "ultima_modificacion": datetime.now(timezone.utc).isoformat()
       
     }
     supabase.table('cuadros').update(data).eq('id', cuadro_id).execute()
+
+def actualizar_aislamiento(cuadro_id, aislamiento, usuario):
+    data = {
+        "aislamiento_megaohmnios": aislamiento,
+        "ultimo_usuario": usuario,
+        "ultima_modificacion": datetime.now(timezone.utc).isoformat()
+      
+    }
+    supabase.table('cuadros').update(data).eq('id', cuadro_id).execute()    
 
 def pantalla_gestion():
     centro_id = st.session_state["centro_seleccionado"]
@@ -193,28 +201,30 @@ def pantalla_gestion():
         
 
         # Campos de entrada únicos
-        tierra = st.number_input(
-            "Medición de Tierra (Ω)",
-            value=row["tierra_ohmnios"] or 0.0,
-            key=f"tierra_input_{cuadro_id}",
-            min_value=0.0,
-            step=1.0
+        tierra=st.number_input(
+        "Medición de Tierra (Ω)",
+        value=row["tierra_ohmnios"] or 0.0,
+        key=f"tierra_input_{cuadro_id}",
+        min_value=0.0,
+        step=1.0,
+        on_change=lambda: actualizar_tierra(cuadro_id, st.session_state[f"tierra_input_{cuadro_id}"], usuario)
         )
-
-        aislamiento = st.number_input(
-            "Medición de Aislamiento (MΩ)",
-            value=row["aislamiento_megaohmnios"] or 0.0,
-            key=f"aislamiento_input_{cuadro_id}",
-            min_value=0.0,
-            step=1.0
+        aislamiento=st.number_input(
+        "Medición de Aislamiento (MΩ)",
+        value=row["aislamiento_megaohmnios"] or 0.0,
+        key=f"aislamiento_input_{cuadro_id}",
+        min_value=0.0,
+        step=1.0,
+        on_change=lambda: actualizar_aislamiento(cuadro_id, st.session_state[f"aislamiento_input_{cuadro_id}"], usuario)
         )
 
         col1, col2 = st.columns([1, 1])
 
-        with col1:
-            if st.button("Actualizar", key=f"actualizar_btn_{cuadro_id}"):
-                actualizar_cuadro(cuadro_id, tierra, aislamiento, st.session_state["usuario"])
-                st.rerun()
+        #with col1:
+            #if st.button("Actualizar", key=f"actualizar_btn_{cuadro_id}"):
+                #actualizar_tierra(cuadro_id, tierra,st.session_state["usuario"])
+                #actualizar_aislamiento(cuadro_id, aislamiento,st.session_state["usuario"])
+                #st.rerun()
 
         with col2:
             with st.expander("Eliminar cuadro", expanded=False):
