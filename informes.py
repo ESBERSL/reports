@@ -4,6 +4,8 @@ from io import BytesIO
 from supabase import create_client, Client
 import streamlit as st
 from datetime import datetime
+from database import  obtener_defectos
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 # Conexión a Supabase
 url = st.secrets["supabase"]["SUPABASE_URL"]
@@ -139,7 +141,7 @@ def generar_informe_word_aislamientos(centro_id):
     medidas_tierra = df_cuadros["aislamiento_megaohmnios"].tolist()
 
     # Analizar la medición más alta y comparar con 1
-    medida_maxima = max(medidas_tierra)
+    medida_maxima = min(medidas_tierra)
     informe_estado = "Favorable" if medida_maxima >= 1 else "Desfavorable"
 
     reemplazos = {
@@ -216,6 +218,110 @@ def generar_informe_word_aislamientos(centro_id):
     fname = f"{fecha_actual.strftime('%Y-%m-%d')}_{datos_centro['nombre'].split('_')[0]}_InfAislamientos"
     with open("/tmp/informe.docx", "rb") as pdf_file:
         st.download_button("Descargar Informe", pdf_file, file_name=(f"{fname}.docx"), mime="application/docx")
+
+
+
+PLANTILLA_BRA = "BASE_BRA.docx"  # Ruta de la nueva plantilla Word
+
+def generar_informe_word_bra(centro_id):
+    doc = Document(PLANTILLA_BRA)
+    datos_centro = obtener_datos_centro(centro_id)
+    fecha_actual = datetime.now()
+    nombre_centro = datos_centro.get("nombre", "Desconocido")
+    direccion_centro = datos_centro.get("direccion", "Desconocida")
+    cp_centro = str(int(float(datos_centro.get("cp", 0)))) if datos_centro.get("cp") else "00000"
+    provincia_centro = datos_centro.get("provincia", "Desconocida")
+    pueblo_centro = datos_centro.get("pueblo", "Desconocido")
+    email = datos_centro.get("email", "Desconocido")
+    telf = datos_centro.get("telf", "Desconocido")
+    pot = datos_centro.get("pot", "Desconocido")
+    nif = datos_centro.get("nif", "Desconocido")
+
+    reemplazos = {
+        "[NOMBRE_EDIFICIO]": nombre_centro,
+        "[DOMICILIO]": direccion_centro,
+        "[CP]": cp_centro,
+        "[PROVINCIA]": provincia_centro,
+        "[MUNICIPIO]": pueblo_centro,
+        "[MAIL]": email,
+        "[TELEFONO]": telf,
+        "[POTENCIA]": pot,
+        "[NIF]": nif
+    }
+
+    # Reemplazo en texto
+    for paragraph in doc.paragraphs:
+        for placeholder, valor in reemplazos.items():
+            for run in paragraph.runs:
+                if placeholder in run.text:
+                    run.text = run.text.replace(placeholder, valor)
+
+    # Reemplazo en tablas
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for para in cell.paragraphs:
+                    for run in para.runs:
+                        for placeholder, valor in reemplazos.items():
+                            if placeholder in run.text:
+                                run.text = run.text.replace(placeholder, valor)
+
+    # Reemplazo en encabezado
+    for section in doc.sections:
+        for header in section.header.paragraphs:
+            for run in header.runs:
+                for placeholder, valor in reemplazos.items():
+                    if placeholder in run.text:
+                        run.text = run.text.replace(placeholder, valor)
+
+        # Obtener la tabla de 5 columnas
+    defectos = obtener_defectos(centro_id)
+    print(centro_id)
+    tabla = None
+    for t in doc.tables:
+        if len(t.columns) == 5:
+            tabla = t
+            break
+
+    if not tabla:
+        raise ValueError("No se encontró una tabla con 5 columnas en la plantilla.")
+
+    cuadros_agregados = set()
+
+    for defecto in defectos:
+        cuadro = defecto["cuadro"]
+        nombre_normalizado = defecto["nombre_normalizado"]
+        itc = defecto["itc"]
+
+        if cuadro not in cuadros_agregados:
+            # Fila con nombre del cuadro en negrita
+            row_cells = tabla.add_row().cells
+            p = row_cells[0].paragraphs[0]
+            run = p.add_run(cuadro)
+            run.bold = True
+            cuadros_agregados.add(cuadro)
+
+        # Fila con defecto
+        row_cells = tabla.add_row().cells
+        row_cells[0].text = nombre_normalizado
+        row_cells[1].text = itc
+        row_cells[2].text = ""
+        row_cells[3].text = "x"
+        row_cells[3].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+        row_cells[4].text = "NO"
+        row_cells[4].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+  
+
+    # Guardar y descargar
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    file_path = "tmp/informe_bra.docx"
+    doc.save(file_path)
+
+    fname = f"{fecha_actual.strftime('%Y-%m-%d')}_{nombre_centro.split('_')[0]}_BRA"
+    with open("tmp/informe_bra.docx", "rb") as docx_file:
+        st.download_button("Descargar BRA", docx_file, file_name=f"{fname}.docx", mime="application/docx")        
     
 # Función para obtener el archivo Word generado
 def obtener_word_tierras(centro_id):

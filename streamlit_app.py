@@ -1,101 +1,51 @@
 import streamlit as st
+
+if __name__ == "__main__":  
+    # Configuración de la página
+    st.set_page_config(page_title="Gestión de Centros", page_icon="🏢", layout="wide")
+    st.markdown(
+        """
+        <style>
+        .css-1aumxhk {
+            background-color: #f0f2f5;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
 from supabase import create_client, Client
-import pandas as pd
-import bcrypt
 from datetime import datetime,timezone
-from informes import obtener_word_tierras
-from informes import obtener_word_aislamientos
-import streamlit_cookies_manager as cookies_manager
-
-st.set_page_config(
-    page_title="Gestión de Centros",  # Nombre de la pestaña en el navegador
-    page_icon="🏢",  # Icono de la pestaña 
-)
-
-cookies = cookies_manager.CookieManager()
-
+from streamlit_cookies_manager import EncryptedCookieManager
+from interfaces import pantalla_inicio, pantalla_gestion
+from zoneinfo import ZoneInfo
+from auth import  verificar_login, guardar_estado_sesion
 
 # Conexión a la base de datos de Supabase
 url = st.secrets["supabase"]["SUPABASE_URL"]
 key = st.secrets["supabase"]["SUPABASE_KEY"]
 supabase: Client = create_client(url, key)
+cookies = EncryptedCookieManager(password=st.secrets["supabase"]["cook"])
+
+def ahora_es():
+    return datetime.now(ZoneInfo("Europe/Madrid"))
 
 
-# Función para verificar credenciales
-def verificar_login(username, password):
-    try:
-        response = supabase.table('usuarios').select('*').eq('username', username).execute()
-        if not response.data:
-            return False
-        usuario = response.data[0]
-        # Verificar contraseña hasheada
-        if bcrypt.checkpw(password.encode('utf-8'), usuario['password'].encode('utf-8')):
-            return True
-        return False
-    except Exception as e:
-        st.error(f"Error de autenticación: {str(e)}")
-        return False
-
-# Función para obtener la lista de centros
-def obtener_centros():
-    response = supabase.table('centros').select('*').execute()
-    return pd.DataFrame(response.data)
-
-# Función para obtener los cuadros eléctricos de un centro
-def obtener_cuadros(centro_id):
-    response = supabase.table('cuadros').select('*').eq('centro_id', centro_id).execute()
-    return pd.DataFrame(response.data)
-
-# Función para insertar un nuevo cuadro
-def agregar_cuadro(centro_id, tipo, nombre, numero, usuario):
-    data = {
-        "centro_id": centro_id,
-        "tipo": tipo,
-        "nombre": nombre,
-        "numero": numero,
-        "tierra_ohmnios": None,
-        "aislamiento_megaohmnios": None,
-        "ultimo_usuario": usuario,
-        "ultima_modificacion": datetime.now(timezone.utc).isoformat()
-    }
-    response = supabase.table('cuadros').insert(data).execute()
-    return response
-
-# Función para guardar estado sesión
-def guardar_estado_sesion(username, pagina, centro_id, subpagina):
-    data = {
-        "username": username,
-        "pagina": pagina,
-        "centro_seleccionado": centro_id,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "subpagina": subpagina
-    }
-    
-    supabase.table("sesiones").upsert(data, on_conflict=["username"]).execute()
-    cookies["usuario"] = username
-    cookies["pagina"] = pagina
-    cookies["centro_seleccionado"] = centro_id
-    cookies["timestamp"] = datetime.now(timezone.utc).isoformat()
-    cookies["subpagina"] = subpagina
-    cookies.save()
-
-
-def cerrar_sesion():
-    supabase.table("sesiones").delete().eq("username", st.session_state["usuario"]).execute()
-    cookies.clear()  # Limpiar las cookies)
-    st.session_state.clear()  # Limpiar el estado de la sesión
-    cookies["logout"] = True
-    cookies.save()
-    st.session_state["logout_forzado"] = True
-    st.rerun()
-
-# ------------------ INTERFAZ DE USUARIO ------------------ #
 def pantalla_login():
     st.title("Inicio de Sesión")
     username = st.text_input("Usuario")
     password = st.text_input("Contraseña", type="password")
     
     if st.button("Ingresar"):
+        print(username)
+        
+        if not cookies.ready():
+            st.info("Cargando sesión... refresque la página si tarda mucho.")
+            st.stop()   
+        cookies['usuario'] = username
+        print("Cookie de usuario guardada")
+        cookies.save()
+        print(cookies.get('usuario'))
         if verificar_login(username, password):
             st.session_state['autenticado'] = True
             st.session_state['usuario'] = username
@@ -105,275 +55,11 @@ def pantalla_login():
         else:
             st.error("Usuario o contraseña incorrectos")
 
-def pantalla_inicio():
-    st.title("Lista de Centros")
-    
-    if st.button("Cerrar sesión"):
-        cerrar_sesion()
-        st.rerun()
-
-    
-    provincia = st.selectbox("Filtrar por provincia", ["Todas", "Alicante", "Valencia", "Castellón"])
-    busqueda = st.text_input("Buscar centro")
-    
-    df_centros = obtener_centros()
-    
-    if provincia != "Todas":
-        df_centros = df_centros[df_centros["provincia"] == provincia]
-    
-    if busqueda:
-        df_centros = df_centros[df_centros["nombre"].str.contains(busqueda, case=False, na=False)]
-
-    for _, row in df_centros.iterrows():
-        if st.button(f"Seleccionar {row['nombre']}"):
-            st.session_state["centro_seleccionado"] = row["id"]
-            st.session_state["nombre_centro"] = row["nombre"]
-            st.session_state["pagina"] = "gestion"
-            st.session_state["subpagina"] = None
-            guardar_estado_sesion(st.session_state["usuario"], "gestion", row["id"], None)
-            st.rerun()
-
-def eliminar_cuadro(cuadro_id):
-    supabase.table('cuadros').delete().eq('id', cuadro_id).execute()
-
-def actualizar_cuadro(cuadro_id, tierra, aislamiento, usuario):
-    data = {
-        "tierra_ohmnios": tierra,
-        "aislamiento_megaohmnios": aislamiento,
-        "ultimo_usuario": usuario,
-        "ultima_modificacion": datetime.now(timezone.utc).isoformat()
-      
-    }
-    supabase.table('cuadros').update(data).eq('id', cuadro_id).execute()
-def pantalla_mediciones():
-    guardar_estado_sesion(st.session_state["usuario"],st.session_state["pagina"],st.session_state["centro_seleccionado"], "mediciones")   
-    centro_id = st.session_state["centro_seleccionado"]
-    df_cuadros = obtener_cuadros(centro_id)
-    if not df_cuadros.empty:
-    # Filtramos filas que tengan fecha válida
-        df_cuadros = df_cuadros.dropna(subset=["ultima_modificacion"])
-    if not df_cuadros.empty:
-        # Convertimos a datetime y buscamos la más reciente
-        df_cuadros["ultima_modificacion"] = pd.to_datetime(df_cuadros["ultima_modificacion"])
-        cuadro_reciente = df_cuadros.sort_values("ultima_modificacion", ascending=False).iloc[0]
-        fecha_hora_mod = cuadro_reciente["ultima_modificacion"].strftime("%d/%m/%Y a las %H:%M")
-        st.write(f"Última modificación por: {cuadro_reciente['ultimo_usuario']} el: {fecha_hora_mod}")
-
-    for _, row in df_cuadros.iterrows():
-        cuadro_id = row['id']
-        st.subheader(f"Cuadro: {row['nombre']}")
-        with st.expander("Editar cuadro"):
-            nuevo_tipo = st.selectbox("Tipo", ["CGBT", "CS", "CT", "CC"], index=["CGBT", "CS", "CT", "CC"].index(row["tipo"]), key=f"edit_tipo_{cuadro_id}")
-            nuevo_numero = st.number_input("Número", value=row["numero"], min_value=0, max_value=100, key=f"edit_numero_{cuadro_id}")
-            nuevo_nombre = st.text_input("Nombre", value=row["nombre"], key=f"edit_nombre_{cuadro_id}")
-            
-            if st.button("Guardar cambios", key=f"guardar_edicion_{cuadro_id}"):
-                actualizar_datos = {
-                    "tipo": nuevo_tipo,
-                    "numero": nuevo_numero,
-                    "nombre": nuevo_nombre,
-                    "ultimo_usuario": st.session_state["usuario"],
-                    "ultima_modificacion": datetime.now(timezone.utc).isoformat()
-                }
-                supabase.table('cuadros').update(actualizar_datos).eq('id', cuadro_id).execute()
-                st.success("Cuadro actualizado correctamente.")
-                st.rerun()
-        
-
-        # Campos de entrada únicos
-        tierra = st.number_input(
-            "Medición de Tierra (Ω)",
-            value=row["tierra_ohmnios"] or 0.0,
-            key=f"tierra_input_{cuadro_id}",
-            min_value=0.0,
-            step=1.0
-        )
-
-        aislamiento = st.number_input(
-            "Medición de Aislamiento (MΩ)",
-            value=row["aislamiento_megaohmnios"] or 0.0,
-            key=f"aislamiento_input_{cuadro_id}",
-            min_value=0.0,
-            step=1.0
-        )
-
-        col1, col2 = st.columns([1, 1])
-
-        with col1:
-            if st.button("Actualizar", key=f"actualizar_btn_{cuadro_id}"):
-                actualizar_cuadro(cuadro_id, tierra, aislamiento, st.session_state["usuario"])
-                st.rerun()
-
-        with col2:
-            with st.expander("Eliminar cuadro", expanded=False):
-                st.warning("Esta acción no se puede deshacer.")
-                if st.button("Confirmar eliminación", key=f"eliminar_btn_{cuadro_id}"):
-                    eliminar_cuadro(cuadro_id)
-                    st.success(f"Cuadro '{row['nombre']}' eliminado.")
-                    st.rerun()
-
-    st.subheader("Añadir Cuadro Eléctrico")
-    tipo = st.selectbox("Tipo", ["CGBT", "CS", "CT", "CC"], key="tipo")
-    numero = st.number_input("Número del cuadro", key="numero",min_value=0,max_value=100, step=1) 
-    nombre = st.text_input("Nombre del cuadro", key="nombre")
-    usuario = st.session_state['usuario']
-    if st.button("Añadir Cuadro"):
-        if nombre:
-            try:
-                agregar_cuadro(centro_id, tipo, nombre, numero, usuario)
-                st.rerun()
-            except ValueError as e:
-                st.error(str(e))
-        else:
-            st.warning("Debes completar todos los campos")
-    col1, col2 = st.columns([1, 1])
-
-    with col1:
-        if st.button("Generar Informe Tierras"):
-            obtener_word_tierras(centro_id)
-
-    with col2:
-        if st.button("Generar Informe Aislamientos"):
-            obtener_word_aislamientos(centro_id) 
-
-def pantalla_defectos():
-    guardar_estado_sesion(st.session_state["usuario"],st.session_state["pagina"],st.session_state["centro_seleccionado"], "defectos")
-    centro_id = st.session_state["centro_seleccionado"]
-    nomb = st.session_state["nombre_centro"]
-    st.title(f"Gestión de Defectos del Centro {nomb}")
-
-    df_cuadros = obtener_cuadros(centro_id)
-    
-    if not df_cuadros.empty:
-        for _, row in df_cuadros.iterrows():
-            cuadro_id = row['id']
-            st.subheader(f"Cuadro: {row['nombre']}")
-            
-            with st.expander("Editar cuadro"):
-                nuevo_tipo = st.selectbox("Tipo", ["CGBT", "CS", "CT", "CC"], index=["CGBT", "CS", "CT", "CC"].index(row["tipo"]), key=f"edit_tipo_{cuadro_id}")
-                nuevo_numero = st.number_input("Número", value=row["numero"], min_value=0, max_value=100, key=f"edit_numero_{cuadro_id}")
-                nuevo_nombre = st.text_input("Nombre", value=row["nombre"], key=f"edit_nombre_{cuadro_id}")
-                
-                if st.button("Guardar cambios", key=f"guardar_edicion_{cuadro_id}"):
-                    actualizar_datos = {
-                        "tipo": nuevo_tipo,
-                        "numero": nuevo_numero,
-                        "nombre": nuevo_nombre,
-                        "ultimo_usuario": st.session_state["usuario"],
-                        "ultima_modificacion": datetime.now(timezone.utc).isoformat()
-                    }
-                    supabase.table('cuadros').update(actualizar_datos).eq('id', cuadro_id).execute()
-                    st.success("Cuadro actualizado correctamente.")
-                    st.rerun()
-
-            # Agregar el checklist de defectos
-            st.write("Defectos actuales:")
-
-            defectos = ["Defecto 1", "Defecto 2", "Defecto 3", "Defecto 4", "Defecto 5"]  # Lista de defectos predefinidos
-
-            # Asegurarse de que row["defectos"] sea una lista, aunque si es None
-            defectos_registrados = row.get("defectos", [])
-            if defectos_registrados is None:
-                defectos_registrados = []
-
-            seleccionados = []
-            for defecto in defectos:
-                # Cada checkbox ahora tiene un key único
-                seleccionados.append(st.checkbox(defecto, key=f"defecto_{cuadro_id}_{defecto}", value=defecto in defectos_registrados))
-
-            if st.button(f"Guardar defectos para cuadro {cuadro_id}", key=f"guardar_defectos_{cuadro_id}"):
-                # Actualizamos los defectos seleccionados
-                defectos_seleccionados = [defecto for defecto, seleccionado in zip(defectos, seleccionados) if seleccionado]
-                actualizar_defectos(cuadro_id, defectos_seleccionados)
-                st.success("Defectos actualizados correctamente.")
-                st.rerun()
-
-            # Campos para eliminar el cuadro
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                if st.button(f"Eliminar cuadro {cuadro_id}", key=f"eliminar_btn_{cuadro_id}"):
-                    eliminar_cuadro(cuadro_id)
-                    st.success(f"Cuadro '{row['nombre']}' eliminado.")
-                    st.rerun()
-
-    # Opción para agregar nuevos cuadros
-    st.subheader("Añadir Cuadro Eléctrico")
-    tipo = st.selectbox("Tipo", ["CGBT", "CS", "CT", "CC"], key="tipo_nuevo")
-    numero = st.number_input("Número del cuadro", key="numero_nuevo", min_value=0, max_value=100, step=1) 
-    nombre = st.text_input("Nombre del cuadro", key="nombre_nuevo")
-    usuario = st.session_state['usuario']
-    
-    if st.button("Añadir Cuadro", key="añadir_cuadro"):
-        if nombre:
-            try:
-                agregar_cuadro(centro_id, tipo, nombre, numero, usuario)
-                st.rerun()
-            except ValueError as e:
-                st.error(str(e))
-        else:
-            st.warning("Debes completar todos los campos")
-    
-def actualizar_defectos(cuadro_id, defectos_seleccionados):
-    # Convertir la lista de defectos a formato adecuado para almacenar en la base de datos
-    defectos_string = ",".join(defectos_seleccionados)
-    
-    # Actualizar la base de datos con los defectos
-    supabase.table('cuadros').update({"defectos": defectos_string}).eq('id', cuadro_id).execute()
-
-def pantalla_gestion(): 
-    col1, col2, col3 = st.columns(3)
-    with col1:     
-        if st.button("Cerrar sesión"):
-            cerrar_sesion()
-            st.rerun()         
-    with col2:
-        if st.button("Volver al listado"):
-            st.session_state["pagina"] = "inicio"
-            st.session_state["centro_seleccionado"] = None
-            guardar_estado_sesion(st.session_state["usuario"],st.session_state["pagina"],st.session_state["centro_seleccionado"], None)
-            st.rerun()
-    
-    with col3: 
-        if not st.session_state["subpagina"] == None:
-            if st.button("Volver al selector de gestión"):
-                st.session_state["pagina"] = "gestion"
-                st.session_state["subpagina"] = None
-                st.rerun()       
-    # Selector de gestion
-    
-    if st.session_state["subpagina"] == "mediciones":
-        pantalla_mediciones()
-    elif st.session_state["subpagina"] == "defectos":
-        pantalla_defectos()
-    else:    
-        col1, col2, col3 = st.columns([1, 3, 1]) 
-
-        with col2:
-            st.subheader(st.session_state["nombre_centro"])
-        
-
-        col1, col2, col3, col4, col5 = st.columns([1, 1, 2, 1, 1]) 
-
-        with col3:
-            if st.button("Gestionar Mediciones"):
-                st.session_state["subpagina"] = "mediciones"
-                st.rerun()
-            if st.button("Gestionar Defectos"):
-                st.session_state["subpagina"] = "defectos"
-                st.rerun()
-
-    
-      
-    
-        
-
-
 # ------------------ FLUJO PRINCIPAL ------------------ #
-# Cargar el estado al inicio
-
+# FLUJO PRINCIPAL
 if 'autenticado' not in st.session_state:
     st.session_state['autenticado'] = False
-    st.session_state['subpagina'] = None
+    st.session_state["usuario"] = None
 
 if "logout_forzado" in st.session_state:
     st.session_state.pop("logout_forzado")
@@ -381,40 +67,35 @@ else:
     if not cookies.ready():
         st.info("Cargando sesión... refresque la página si tarda mucho.")
         st.stop()
-
     if not st.session_state['autenticado']:
+        print("No autenticado")
         if "usuario" in cookies:
-            username = cookies.get('usuario')
-            if username:
-                    # Comprobar si tiene sesión guardada reciente
+                print("Cookie de usuario encontrada")
+                username = cookies["usuario"]
+                print(username)
+                if username:
                     resp = supabase.table("sesiones").select("*").eq("username", username).execute()
                     if resp.data:
                         sesion = resp.data[0]
-                        if sesion["centro_seleccionado"] is not None:
-                            x = supabase.table("centros").select("*").eq("id", sesion["centro_seleccionado"]).execute()
-                            cent = x.data[0]
-                            print (cent["nombre"])
-                        ahora = datetime.now(timezone.utc)
-                        ultima = datetime.fromisoformat(sesion["timestamp"])
-                        if (ahora - ultima).total_seconds() <= 8 * 3600:  # 8 horas
-                            st.session_state['autenticado'] = True
-                            st.session_state['subpagina'] = sesion["subpagina"]
-                            st.session_state['centro_seleccionado'] = sesion["centro_seleccionado"]
-                            st.session_state['usuario'] = username
-                            st.session_state['pagina'] = sesion["pagina"]
-                            st.session_state['centro_seleccionado'] = sesion["centro_seleccionado"] 
-                            if sesion["centro_seleccionado"] is not None:
-                                st.session_state['nombre_centro'] = cent["nombre"]
-
+                        ahora = ahora_es()
+                        ultima = datetime.fromisoformat(sesion["timestamp"]).astimezone(ZoneInfo("Europe/Madrid"))
+                        if (ahora - ultima).total_seconds() <= 8 * 3600:
+                            st.session_state.update({
+                                "autenticado": True,
+                                "usuario": username,
+                                "pagina": sesion["pagina"],
+                                "centro_seleccionado": sesion["centro_seleccionado"],
+                                "subpagina": sesion["subpagina"],
+                                "cuadro_id": sesion["cuadro_id"]
+                            })
+                            if sesion["centro_seleccionado"]:
+                                centro = supabase.table("centros").select("*").eq("id", sesion["centro_seleccionado"]).execute().data[0]
+                                st.session_state["nombre_centro"] = centro["nombre"]
+                        else:
+                            supabase.table("sesiones").delete().eq("username", username).execute()   
 if not st.session_state['autenticado']:
     pantalla_login()
-else:
-    if "pagina" not in st.session_state:
-        st.session_state["pagina"] = "inicio"
-    if "centro_seleccionado" not in st.session_state:
-        st.session_state["centro_seleccionado"] = None
-
-    if st.session_state["pagina"] == "inicio":
-        pantalla_inicio()
-    elif st.session_state["pagina"] == "gestion":
-        pantalla_gestion()     
+elif st.session_state["pagina"] == "inicio":
+    pantalla_inicio()
+elif st.session_state["pagina"] == "gestion":
+    pantalla_gestion()
