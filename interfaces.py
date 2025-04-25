@@ -27,21 +27,21 @@ def pantalla_inicio():
     busqueda = st.text_input("Buscar centro")
     
     df_centros = obtener_centros()
-    
-    if provincia != "Todas":
-        df_centros = df_centros[df_centros["provincia"] == provincia]
-    
-    if busqueda:
-        df_centros = df_centros[df_centros["nombre"].str.contains(busqueda, case=False, na=False)]
-
-    for _, row in df_centros.iterrows():
-        if st.button(f"Seleccionar {row['nombre']}"):
-            st.session_state["centro_seleccionado"] = row["id"]
-            st.session_state["nombre_centro"] = row["nombre"]
-            st.session_state["pagina"] = "gestion"
-            st.session_state["subpagina"] = None
-            guardar_estado_sesion(st.session_state["usuario"], "gestion", row["id"], None)
-            st.rerun()
+    col1, col2, col3 = st.columns([1, 2, 1])  # Proporciones: centro más ancho 
+    with col2:
+        if provincia != "Todas":
+            df_centros = df_centros[df_centros["provincia"] == provincia]
+        
+        if busqueda:
+            df_centros = df_centros[df_centros["nombre"].str.contains(busqueda, case=False, na=False)]
+        for _, row in df_centros.iterrows():
+            if st.button(f"Seleccionar {row['nombre']}",use_container_width=True):
+                st.session_state["centro_seleccionado"] = row["id"]
+                st.session_state["nombre_centro"] = row["nombre"]
+                st.session_state["pagina"] = "gestion"
+                st.session_state["subpagina"] = None
+                guardar_estado_sesion(st.session_state["usuario"], "gestion", row["id"], None)
+                st.rerun()
 
 
 
@@ -401,11 +401,14 @@ def pantalla_gestion():
         pantalla_mediciones()
     elif st.session_state["subpagina"] == "defectos":
         pantalla_defectos()
-    else:    
-        st.subheader(st.session_state["nombre_centro"])
-        if st.button("Gestionar Mediciones"):
-            st.session_state["subpagina"] = "mediciones"
-            st.rerun()
-        if st.button("Gestionar Defectos"):
-            st.session_state["subpagina"] = "defectos"
-            st.rerun()     
+    else: 
+        col1, col2, col3 = st.columns([1, 2, 1])  # Proporciones: centro más ancho
+
+        with col2:   
+            st.subheader(st.session_state["nombre_centro"])
+            if st.button("Gestionar Mediciones", use_container_width=True):
+                st.session_state["subpagina"] = "mediciones"
+                st.rerun()
+            if st.button("Gestionar Defectos", use_container_width=True):
+                st.session_state["subpagina"] = "defectos"
+                st.rerun()     
