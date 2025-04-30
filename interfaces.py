@@ -340,7 +340,7 @@ def pantalla_defectos():
         if nombre:
             try:
                 # Procesar la adición del cuadro
-                agregar_cuadro(centro_id, tipo, nombre, numero, usuario)
+                agregar_cuadro(centro_id, tipo, nombre, numero, usuario, 0, 0)
                 respuesta = supabase.table("cuadros")\
                     .select("id")\
                     .eq("nombre", nombre)\

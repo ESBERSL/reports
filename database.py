@@ -52,14 +52,14 @@ def obtener_defectos(centro_id):
 
 # Función para insertar un nuevo cuadro
 
-def agregar_cuadro(centro_id, tipo, nombre, numero, usuario):
+def agregar_cuadro(centro_id, tipo, nombre, numero, usuario, tierra, aislamiento):
     data = {
         "centro_id": centro_id,
         "tipo": tipo,
         "nombre": nombre,
         "numero": numero,
-        "tierra_ohmnios": None,
-        "aislamiento_megaohmnios": None,
+        "tierra_ohmnios": tierra,
+        "aislamiento_megaohmnios": aislamiento,
         "ultimo_usuario": usuario,
         "ultima_modificacion": datetime.now(timezone.utc).isoformat()
         }
