@@ -234,6 +234,13 @@ def generar_informe_word_aislamientos(centro_id):
 PLANTILLA_BRA = "BASE_BRA.docx" 
 
 def generar_informe_word_bra(centro_id):
+
+    meses = {
+    "January": "enero", "February": "febrero", "March": "marzo", "April": "abril",
+    "May": "mayo", "June": "junio", "July": "julio", "August": "agosto",
+    "September": "septiembre", "October": "octubre", "November": "noviembre", "December": "diciembre"
+    }
+
     doc = Document(PLANTILLA_BRA)
     datos_centro = obtener_datos_centro(centro_id)
     fecha_actual = datetime.now()
@@ -247,6 +254,9 @@ def generar_informe_word_bra(centro_id):
     pot = datos_centro.get("pot", "Desconocido")
     nif = datos_centro.get("nif", "Desconocido")
     cups = datos_centro.get("cups", "Desconocido")
+    dia = fecha_actual.day
+    mes = meses[fecha_actual.strftime("%B")] 
+    año = fecha_actual.year
 
     reemplazos = {
         "[NOMBRE_EDIFICIO]": nombre_centro,
@@ -258,7 +268,10 @@ def generar_informe_word_bra(centro_id):
         "[TELEFONO]": telf,
         "[POTENCIA]": pot,
         "[NIF]": nif,
-        "[CUPS]": cups
+        "[CUPS]": cups,
+        "[DIA]": str(dia),
+        "[MES]": mes,
+        "[AÑO]": str(año)
     }
 
     # Reemplazo en texto
