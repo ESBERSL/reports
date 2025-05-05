@@ -16,7 +16,7 @@ supabase: Client = create_client(url, key)
 # ----------------------------
 def cargar_datos_excel(ruta_archivo):
     df = pd.read_excel(ruta_archivo)
-    return df[["nombre", "CIF", "email", "pot"]]
+    return df[["nombre", "CUPS"]]
 
 # ----------------------------
 # ACTUALIZACIÓN EN SUPABASE
@@ -47,20 +47,9 @@ def actualizar_datos_centros(excel_path):
         # Prepara el diccionario de campos a actualizar si existen
         updates = {}
 
-        nif = limpiar_campo(row.get("CIF"))
-        if nif:
-            updates["nif"] = nif
-
-        email = limpiar_campo(row.get("email"))
-        if email:
-            updates["email"] = email
-
-        pot = limpiar_campo(row.get("pot"))
-        if pot:
-            try:
-                updates["pot"] = pot
-            except ValueError:
-                print(f"[ERROR] Potencia no válida para '{nombre_excel}': '{pot}'")
+        cups = limpiar_campo(row.get("CUPS"))
+        if cups:
+            updates["cups"] = cups
 
         if updates:
             supabase.table("centros").update(updates).eq("id", centro_id).execute()

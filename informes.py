@@ -4,7 +4,7 @@ from io import BytesIO
 from supabase import create_client, Client
 import streamlit as st
 from datetime import datetime
-from database import  obtener_defectos
+from database import  obtener_defectos, obtener_datos_cuadro
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 # Conexión a Supabase
@@ -101,7 +101,12 @@ def generar_informe_word_tierras(centro_id):
     # Agregar filas con los datos
     for _, row in df_cuadros.iterrows():
         row_cells = tabla.add_row().cells
-        row_cells[0].text = str(row['numero'])
+        if row['tipo'] == 'CGBT':
+            row_cells[0].text = str(row['tipo'])
+        elif row['numero']<=9:
+            row_cells[0].text = f"{str(row['tipo'])}-0{str(row['numero'])}"
+        else:
+            row_cells[0].text = f"{str(row['tipo'])}-{str(row['numero'])}" 
         row_cells[1].text = row['nombre']
         row_cells[2].text = str(row['tierra_ohmnios']) if row['tierra_ohmnios'] is not None else 'N/A'
 
@@ -194,9 +199,14 @@ def generar_informe_word_aislamientos(centro_id):
     # Agregar filas con los datos
     for _, row in df_cuadros.iterrows():
         row_cells = tabla.add_row().cells
-        row_cells[0].text = str(row['numero'])
+        if row['tipo'] == 'CGBT':
+            row_cells[0].text = str(row['tipo'])
+        elif row['numero']<=9:
+            row_cells[0].text = f"{str(row['tipo'])}-0{str(row['numero'])}"
+        else:
+            row_cells[0].text = f"{str(row['tipo'])}-{str(row['numero'])}" 
         row_cells[1].text = row['nombre']
-        row_cells[2].text = str(row['aislamiento_megaohmnios']) if row['aislamiento_megaohmnios'] is not None else 'N/A'
+        row_cells[2].text = str(row['tierra_ohmnios']) if row['tierra_ohmnios'] is not None else 'N/A'
 
     # Guardar el documento en memoria
     
@@ -221,7 +231,7 @@ def generar_informe_word_aislamientos(centro_id):
 
 
 
-PLANTILLA_BRA = "BASE_BRA.docx"  # Ruta de la nueva plantilla Word
+PLANTILLA_BRA = "BASE_BRA.docx" 
 
 def generar_informe_word_bra(centro_id):
     doc = Document(PLANTILLA_BRA)
@@ -236,6 +246,7 @@ def generar_informe_word_bra(centro_id):
     telf = datos_centro.get("telf", "Desconocido")
     pot = datos_centro.get("pot", "Desconocido")
     nif = datos_centro.get("nif", "Desconocido")
+    cups = datos_centro.get("cups", "Desconocido")
 
     reemplazos = {
         "[NOMBRE_EDIFICIO]": nombre_centro,
@@ -246,7 +257,8 @@ def generar_informe_word_bra(centro_id):
         "[MAIL]": email,
         "[TELEFONO]": telf,
         "[POTENCIA]": pot,
-        "[NIF]": nif
+        "[NIF]": nif,
+        "[CUPS]": cups
     }
 
     # Reemplazo en texto
@@ -292,15 +304,23 @@ def generar_informe_word_bra(centro_id):
         cuadro = defecto["cuadro"]
         nombre_normalizado = defecto["nombre_normalizado"]
         itc = defecto["itc"]
+        id= defecto["cuadro_id"]
 
         if cuadro not in cuadros_agregados:
-            # Fila con nombre del cuadro en negrita
+
+            tipo, numero = obtener_datos_cuadro(id)
             row_cells = tabla.add_row().cells
             p = row_cells[0].paragraphs[0]
-            run = p.add_run(cuadro)
+
+            if tipo == 'CGBT':
+                run = p.add_run(str(tipo))
+            elif numero <= 9:
+                run = p.add_run(f"{tipo}-0{numero} {cuadro}")
+            else:
+                run = p.add_run(f"{tipo}-{numero} {cuadro}") 
+
             run.bold = True
             cuadros_agregados.add(cuadro)
-
         # Fila con defecto
         row_cells = tabla.add_row().cells
         row_cells[0].text = nombre_normalizado

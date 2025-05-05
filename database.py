@@ -28,6 +28,7 @@ def obtener_defectos(centro_id):
 
     for _, cuadro in cuadros_df.iterrows():
         nombre_cuadro = cuadro["nombre"]
+        cuadro_id = cuadro["id"]
         defectos_str = cuadro.get("defectos")
         
         if isinstance(defectos_str, list):
@@ -43,7 +44,8 @@ def obtener_defectos(centro_id):
                 lista_defectos.append({
                     "cuadro": nombre_cuadro,
                     "nombre_normalizado": defecto["nombre_defecto_normalizado"],
-                    "itc": defecto["itc"]
+                    "itc": defecto["itc"],
+                    "cuadro_id": cuadro_id
                 })
             else:
                 print(f"[AVISO] Defecto no encontrado en diccionario: '{nombre_base}' (cuadro: {nombre_cuadro})")
@@ -105,3 +107,11 @@ def actualizar_defectos(cuadro_id, defectos_lista):
     supabase.table("cuadros").update({
         "defectos": defectos_lista
     }).eq("id", cuadro_id).execute()
+
+def obtener_datos_cuadro(cuadro_id):
+    response = supabase.table("cuadros").select("tipo, numero").eq("id", cuadro_id).single().execute()
+    
+    if response.data:
+        return response.data["tipo"], response.data["numero"]
+    else:
+        return None, None
