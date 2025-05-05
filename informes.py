@@ -276,7 +276,8 @@ def generar_informe_word_bra(centro_id):
                     for run in para.runs:
                         for placeholder, valor in reemplazos.items():
                             if placeholder in run.text:
-                                run.text = run.text.replace(placeholder, valor)
+                                if valor is not None:
+                                    run.text = run.text.replace(placeholder, valor)
 
     # Reemplazo en encabezado
     for section in doc.sections:
@@ -284,7 +285,8 @@ def generar_informe_word_bra(centro_id):
             for run in header.runs:
                 for placeholder, valor in reemplazos.items():
                     if placeholder in run.text:
-                        run.text = run.text.replace(placeholder, valor)
+                        if valor is not None:
+                         run.text = run.text.replace(placeholder, valor)
 
         # Obtener la tabla de 5 columnas
     defectos = obtener_defectos(centro_id)
