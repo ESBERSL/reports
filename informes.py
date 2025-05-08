@@ -232,6 +232,7 @@ def generar_informe_word_aislamientos(centro_id):
 
 
 PLANTILLA_BRA = "BASE_BRA.docx" 
+PLANTILLA_BRA_SD = "BASE_BRA_SD.docx"
 
 def generar_informe_word_bra(centro_id):
 
@@ -241,7 +242,10 @@ def generar_informe_word_bra(centro_id):
     "September": "septiembre", "October": "octubre", "November": "noviembre", "December": "diciembre"
     }
 
-    doc = Document(PLANTILLA_BRA)
+    defectos = obtener_defectos(centro_id) or []
+    plantilla = PLANTILLA_BRA if defectos else PLANTILLA_BRA_SD
+    doc = Document(plantilla)
+    
     datos_centro = obtener_datos_centro(centro_id)
     fecha_actual = datetime.now()
     nombre_centro = datos_centro.get("nombre", "Desconocido")
@@ -360,7 +364,14 @@ def generar_informe_word_bra(centro_id):
     
 # Función para obtener el archivo Word generado
 def obtener_word_tierras(centro_id):
+    df_cuadros = obtener_cuadros(centro_id)
+    if df_cuadros.empty:
+        raise ValueError(f"No hay cuadros creados en el centro para generar el informe de tierras.")
     return generar_informe_word_tierras(centro_id)
 
+
 def obtener_word_aislamientos(centro_id):
+    df_cuadros = obtener_cuadros(centro_id)
+    if df_cuadros.empty:
+        raise ValueError(f"No hay cuadros creados en el centro para generar el informe de aislamientos.")
     return generar_informe_word_aislamientos(centro_id)

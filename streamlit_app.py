@@ -1,6 +1,8 @@
 import streamlit as st
 
+
 if __name__ == "__main__":  
+
     # Configuración de la página
     st.set_page_config(page_title="Gestión de Centros", page_icon="🏢", layout="wide")
     st.markdown(
@@ -14,10 +16,12 @@ if __name__ == "__main__":
         unsafe_allow_html=True,
     )
 
+    
+
 from supabase import create_client, Client
 from datetime import datetime,timezone
 from streamlit_cookies_manager import EncryptedCookieManager
-from interfaces import pantalla_inicio, pantalla_gestion
+from interfaces import pantalla_inicio, pantalla_gestion, pantalla_gestion_cuadros
 from zoneinfo import ZoneInfo
 from auth import  verificar_login, guardar_estado_sesion
 
@@ -26,6 +30,12 @@ url = st.secrets["supabase"]["SUPABASE_URL"]
 key = st.secrets["supabase"]["SUPABASE_KEY"]
 supabase: Client = create_client(url, key)
 cookies = EncryptedCookieManager(password=st.secrets["supabase"]["cook"])
+
+
+if "pagina" not in st.session_state:
+    st.session_state["pagina"] = "inicio"
+
+           
 
 def ahora_es():
     return datetime.now(ZoneInfo("Europe/Madrid"))
@@ -99,3 +109,5 @@ elif st.session_state["pagina"] == "inicio":
     pantalla_inicio()
 elif st.session_state["pagina"] == "gestion":
     pantalla_gestion()
+elif st.session_state["pagina"] == "gestion_cuadros":
+    pantalla_gestion_cuadros()    

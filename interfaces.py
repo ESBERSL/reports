@@ -1,13 +1,24 @@
 import streamlit as st
 from supabase import create_client, Client
 from zoneinfo import ZoneInfo
+from datetime import datetime
 import pandas as pd
-from datetime import datetime,timezone
-from informes import obtener_word_tierras
-from informes import obtener_word_aislamientos, generar_informe_word_bra
-from auth import guardar_estado_sesion,cerrar_sesion
-from database import obtener_centros,obtener_cuadros,agregar_cuadro, eliminar_cuadro, actualizar_aislamiento, actualizar_tierra, actualizar_defectos
 
+from auth import guardar_estado_sesion, cerrar_sesion
+from database import (
+    obtener_centros,
+    obtener_cuadros,
+    agregar_cuadro,
+    eliminar_cuadro,
+    actualizar_tierra,
+    actualizar_aislamiento,
+    actualizar_defectos
+)
+from informes import (
+    obtener_word_tierras,
+    obtener_word_aislamientos,
+    generar_informe_word_bra
+)
 
 # Conexión a la base de datos de Supabase
 url = st.secrets["supabase"]["SUPABASE_URL"]
@@ -17,398 +28,409 @@ supabase: Client = create_client(url, key)
 
 def pantalla_inicio():
     st.title("Lista de Centros")
-    
     if st.button("Cerrar sesión"):
         cerrar_sesion()
         st.rerun()
 
-    
-    provincia = st.selectbox("Filtrar por provincia", ["Todas", "Alicante", "Valencia", "Castellón"])
-    busqueda = st.text_input("Buscar centro")
-    
-    df_centros = obtener_centros()
-    col1, col2, col3 = st.columns([1, 2, 1])  # Proporciones: centro más ancho 
-    with col2:
-        if provincia != "Todas":
-            df_centros = df_centros[df_centros["provincia"] == provincia]
-        
-        if busqueda:
-            df_centros = df_centros[df_centros["nombre"].str.contains(busqueda, case=False, na=False)]
-        for _, row in df_centros.iterrows():
-            if st.button(f"Seleccionar {row['nombre']}",use_container_width=True):
-                st.session_state["centro_seleccionado"] = row["id"]
-                st.session_state["nombre_centro"] = row["nombre"]
-                st.session_state["pagina"] = "gestion"
-                st.session_state["subpagina"] = None
-                guardar_estado_sesion(st.session_state["usuario"], "gestion", row["id"], None)
-                st.rerun()
+    # Filtros
+    provincia = st.selectbox("Filtrar por provincia", ["Todas", "Alicante", "Valencia", "Castellón"], key="provincia")
+    busqueda = st.text_input("Buscar centro", key="busqueda")
+
+    df = obtener_centros()
+    if provincia != "Todas":
+        df = df[df["provincia"] == provincia]
+    if busqueda:
+        df = df[df["nombre"].str.contains(busqueda, case=False, na=False)]
+
+    for _, row in df.iterrows():
+        if st.button(f"Seleccionar {row['nombre']}", use_container_width=True):
+            st.session_state.update({
+                "centro_seleccionado": row["id"],
+                "nombre_centro": row["nombre"],
+                "pagina": "gestion"
+            })
+            guardar_estado_sesion(st.session_state["usuario"], "gestion", row["id"], None)
+            st.rerun()
 
 
-
-def pantalla_mediciones():
-    guardar_estado_sesion(st.session_state["usuario"],st.session_state["pagina"],st.session_state["centro_seleccionado"], "mediciones")   
+def pantalla_gestion():
+    st.header(f"Centro: {st.session_state.get('nombre_centro','')}")
     centro_id = st.session_state["centro_seleccionado"]
-    df_cuadros = obtener_cuadros(centro_id)
+    usuario = st.session_state["usuario"]
 
-    # Verificar si hay cuadros y si la columna 'ultima_modificacion' existe
-    if not df_cuadros.empty and "ultima_modificacion" in df_cuadros.columns:
-        # Filtramos filas que tengan fecha válida
-        df_filtrado = df_cuadros.dropna(subset=["ultima_modificacion"])
-        if not df_filtrado.empty:
-            # Convertimos la fecha a zona horaria de Madrid
-            df_filtrado["ultima_modificacion"] = pd.to_datetime(
-                df_filtrado["ultima_modificacion"], utc=True
-            ).dt.tz_convert("Europe/Madrid")
-            cuadro_reciente = df_filtrado.sort_values("ultima_modificacion", ascending=False).iloc[0]
-            fecha_hora_mod = cuadro_reciente["ultima_modificacion"].strftime("%d/%m/%Y a las %H:%M")
-            st.write(f"Última modificación por: {cuadro_reciente['ultimo_usuario']} el: {fecha_hora_mod}")
-    else:
-        st.write("Aún no hay cuadros creados.")
+    def cb_seccion(c_id, user):
+        val = st.session_state["centro_seccion_acometida"]
+        supabase.from_("centros") \
+            .update({"seccion_acometida": val}) \
+            .eq("id", c_id) \
+            .execute()
 
-    for _, row in df_cuadros.iterrows():
-        cuadro_id = row['id']
-        st.subheader(f"Cuadro: {row['nombre']}")
-        with st.expander("Editar cuadro"):
-            nuevo_tipo = st.selectbox("Tipo", ["CGBT", "CS", "CT", "CC"], index=["CGBT", "CS", "CT", "CC"].index(row["tipo"]), key=f"edit_tipo_{cuadro_id}")
-            nuevo_numero = st.number_input("Número", value=row["numero"], min_value=0, max_value=100, key=f"edit_numero_{cuadro_id}")
-            nuevo_nombre = st.text_input("Nombre", value=row["nombre"], key=f"edit_nombre_{cuadro_id}")
-            
-            if st.button("Guardar cambios", key=f"guardar_edicion_{cuadro_id}"):
-                actualizar_datos = {
-                    "tipo": nuevo_tipo,
-                    "numero": nuevo_numero,
-                    "nombre": nuevo_nombre,
-                    "ultimo_usuario": st.session_state["usuario"],
-                    "ultima_modificacion": datetime.now(ZoneInfo("Europe/Madrid")).isoformat()
-                }
-                supabase.table('cuadros').update(actualizar_datos).eq('id', cuadro_id).execute()
-                st.success("Cuadro actualizado correctamente.")
-                st.rerun()
-        tierra = st.number_input(
-            "Medición de Tierra (Ω)",
-            value=row["tierra_ohmnios"] or 0.0,
-            key=f"tierra_input_{cuadro_id}",
-            min_value=0.0,
-            step=1.0,
-            on_change=lambda:actualizar_tierra(cuadro_id, st.session_state[f"tierra_input_{cuadro_id}"], st.session_state["usuario"])            
-        )
-        aislamiento = st.number_input(
-            "Medición de Aislamiento (MΩ)",
-            value=row["aislamiento_megaohmnios"] or 0.0,
-            key=f"aislamiento_input_{cuadro_id}",
-            min_value=0.0,
-            step=1.0,
-            on_change=lambda:actualizar_aislamiento(cuadro_id, st.session_state[f"aislamiento_input_{cuadro_id}"], st.session_state["usuario"])
-        )
+    def cb_calibre(c_id, user):
+        val = st.session_state["centro_calibre_fusibles"]
+        supabase.from_("centros") \
+            .update({"calibre_fusibles": val}) \
+            .eq("id", c_id) \
+            .execute()
 
-        col1, col2 = st.columns([1, 1])
+    def cb_potencia(c_id, user):
+        val = st.session_state["centro_potencia_grupo"]
+        supabase.from_("centros") \
+            .update({"potencia_grupo": val}) \
+            .eq("id", c_id) \
+            .execute()
+        
+    # Limpiar claves previas
+    for k in ("centro_seccion_acometida","centro_calibre_fusibles","centro_potencia_grupo"):
+        st.session_state.pop(k, None)
 
-        with col2:
-            with st.expander("Eliminar cuadro", expanded=False):
-                st.warning("Esta acción no se puede deshacer.")
-                if st.button("Confirmar eliminación", key=f"eliminar_btn_{cuadro_id}"):
-                    eliminar_cuadro(cuadro_id)
-                    st.success(f"Cuadro '{row['nombre']}' eliminado.")
-                    st.rerun()
-    
-    st.subheader("Añadir Cuadro Eléctrico")
-    tipo = st.selectbox("Tipo", ["CGBT", "CS", "CT", "CC"], key="tipo")
-    numero = st.number_input("Número del cuadro", key="numero", min_value=0, max_value=100, step=1) 
-    nombre = st.text_input("Nombre del cuadro", key="nombre")
-    col1, col2 = st.columns([1, 1])
+    # Obtener datos del centro
+    df = obtener_centros()
+    fila = df[df["id"] == centro_id]
+    datos = fila.iloc[0].to_dict() if not fila.empty else {}
+# ——— Navegación ———
+    if st.button("Cerrar sesión"):
+            cerrar_sesion()
+            st.rerun()
+    col1, col2 = st.columns(2)
     with col1:
-        tierra = st.number_input(
-            "Medición de Tierra (Ω)",
-            value=0.0,
-            key=f"new_tierra_input",
-            min_value=0.0,
-            step=1.0,
-        )
-    with col2:
-        aislamiento = st.number_input(
-            "Medición de Aislamiento (MΩ)",
-            value=0.0,
-            key=f"new_aislamiento_input",
-            min_value=0.0,
-            step=1.0,
-        )
+        if st.button("← Volver a Listado de Centros"):
+            st.session_state["pagina"] = "inicio"
+            guardar_estado_sesion(usuario, "inicio", None, None)
+            st.rerun()
 
-    usuario = st.session_state['usuario']
-    if st.button("Añadir Cuadro"):
-        if nombre:
+    # Datos editables
+    st.subheader("Datos del Centro")
+    seccion = float(datos.get("seccion_acometida") or 0.0)
+    calibre = float(datos.get("calibre_fusibles") or 0.0)
+    potencia = float(datos.get("potencia_grupo")   or 0.0)
+
+    seccion_acometida = st.number_input(
+        "Sección acometida (mm²)", value=seccion, min_value=0.0, step=1.0,
+        key="centro_seccion_acometida",
+        on_change=cb_seccion,
+        args=(centro_id, usuario)
+    )
+    calibre_fusibles = st.number_input(
+        "Calibre fusibles (A)",    value=calibre, min_value=0.0, step=1.0,
+        key="centro_calibre_fusibles",
+        on_change=cb_calibre,
+        args=(centro_id, usuario)
+    )
+    potencia_grupo = st.number_input(
+        "Potencia grupo (kVA)",    value=potencia, min_value=0.0, step=1.0,
+        key="centro_potencia_grupo",
+        on_change=cb_potencia,
+        args=(centro_id, usuario)
+    )
+
+    c1, c2 , c3 = st.columns(3)
+    with c1:
+        if st.button("Guardar datos del centro"):
             try:
-                agregar_cuadro(centro_id, tipo, nombre, numero, usuario, tierra, aislamiento)
-                st.rerun()
+                cid = int(centro_id)
+            except ValueError:
+                st.error(f"ID de centro inválido: {centro_id}")
+            else:
+                # Ejecutamos el update y capturamos la respuesta
+                resp = supabase\
+                    .from_("centros")\
+                    .update({
+                        "seccion_acometida": seccion_acometida,
+                        "calibre_fusibles":   calibre_fusibles,
+                        "potencia_grupo":     potencia_grupo,
+                    })\
+                    .eq("id", cid)\
+                    .execute()
+            st.success("Datos del centro actualizados correctamente.")
+    # Gestionar cuadros
+
+    with c2:
+        if st.button("Gestionar cuadros"):
+            # Actualizamos estado y salvamos en sesión
+            st.session_state["pagina"] = "gestion_cuadros"
+            guardar_estado_sesion(
+                st.session_state["usuario"],
+                "gestion_cuadros",
+                centro_id,
+                None
+            )
+            st.rerun()    
+
+    st.divider()
+
+    # Botones de informes
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        if st.button("Informe Tierras"):
+            try:
+                obtener_word_tierras(centro_id)
             except ValueError as e:
                 st.error(str(e))
-        else:
-            st.warning("Debes completar todos los campos")
-    
-    col1, col2 = st.columns([1, 1])
-
-    with col1:
-        if st.button("Generar Informe Tierras"):
-            obtener_word_tierras(centro_id)
-
-    with col2:
-        if st.button("Generar Informe Aislamientos"):
-            obtener_word_aislamientos(centro_id)
-
-def renderizar_defectos(defectos_categoria, registrados):
-                lineas = []
-                for defecto in defectos_categoria:
-                    encontrados = [d for d in registrados if d.startswith(defecto)]
-                    for d in encontrados:
-                        if "_" in d:
-                            nombre, detalle = d.split("_", 1)
-                            lineas.append(f"- {nombre} ({detalle})")
-                        else:
-                            lineas.append(f"- {d}")
-                return lineas
-
-def pantalla_defectos():
-    defectos_seleccionados = []
-    detalles = {}
-    # Categorías de defectos
-    defectos_generales = [
-        "PUNTERAS", "PEGATINA", "CIR SIN IDENTIFICAR", "OBTURADORES", "IDENTIF. COLORES", 
-        "SIN DIFERENCIAL", "DIFEREN NO ACTUA", "SELECTIVIDAD", "PROTECCION CONTRA SOBRECARGAS", "CERRADURA", 
-        "EMPALMES", "SECCIÓN INADECUADA", "SIN CORTE GENERAL", "AISLAMIENTO", "ARROLLAMIENTO", 
-        "CABLES SIN CANALIZAR", "CANALIZACIONES", "MAL ESTADO", "POLARIDAD INVERTIDA", 
-        "NO LEGIBLE", "CONT. DIRECTO", "TENSION CONTACTO", "GRUPO ELECTROGENO"
-    ]
-
-    defectos_tierras = ["PUERTAS/CHASIS", "MECANISMOS", "CUADRO", "MEDICION ELEVADA"]
-    defectos_emergencias = ["NO HAY EMERGENCIA", "FALLA EMERGENCIA"]
-    defectos_con_detalles = ["CIR SIN IDENTIFICAR", "SELECTIVIDAD", "PROTECCION CONTRA SOBRECARGAS", "SIN DIFERENCIAL", "DIFEREN NO ACTUA", "CERRADURA", "SECCIÓN INADECUADA", "ARROLLAMIENTO", "CABLES SIN CANALIZAR", "CANALIZACIONES", "MAL ESTADO", "POLARIDAD INVERTIDA", "NO LEGIBLE", "CONT. DIRECTO", "MECANISMOS", "NO HAY EMERGENCIA", "FALLA EMERGENCIA"]
-
-    todos_defectos = defectos_generales + defectos_tierras + defectos_emergencias
-
-    def mostrar_checkboxes(lista_defectos, categoria):
-        st.write(f"**{categoria}:**")
-        for defecto in lista_defectos:
-            key_defecto = f"defecto_{cuadro_id}_{defecto}"
-            value = any(d.startswith(defecto) for d in defectos_registrados)
-            seleccionado = st.checkbox(defecto, key=key_defecto, value=value)
-            if seleccionado:
-                defectos_seleccionados.append(defecto)
-                if defecto in defectos_con_detalles:
-                    detalle_key = f"detalle_{cuadro_id}_{defecto}"
-                    detalle_valor = ""
-                    for d in defectos_registrados:
-                        if d.startswith(f"{defecto}_"):
-                            _, detalle_valor = d.split("_", 1)
-                            break
-                    detalles[defecto] = st.text_area(f"Detalles para {defecto}:", value=detalle_valor, key=detalle_key)
-
-    def mostrar_checkboxes_nuevo(lista_defectos, categoria):
-        st.write(f"**{categoria}:**")
-        for defecto in lista_defectos:
-            key_defecto = f"defecto_nuevo_{defecto}"
-            seleccionado = st.checkbox(defecto, key=key_defecto)
-            if seleccionado:
-                defectos_seleccionados.append(defecto)
-                if defecto in defectos_con_detalles:
-                    detalle_key = f"detalle_nuevo_{defecto}"
-                    detalle_valor = ""
-                    detalles[defecto] = st.text_area(f"Detalles para {defecto}:", value=detalle_valor, key=detalle_key)                
-    guardar_estado_sesion(st.session_state["usuario"], st.session_state["pagina"], st.session_state["centro_seleccionado"], "defectos")
-    centro_id = st.session_state["centro_seleccionado"]
-    nomb = st.session_state["nombre_centro"]
-    st.title(f"Gestión de Defectos del Centro {nomb}")
-
-    df_cuadros = obtener_cuadros(centro_id)
-
-    
-
-    if not df_cuadros.empty:
-        for _, row in df_cuadros.iterrows():
-            cuadro_id = row['id']
-            st.subheader(f"Cuadro: {row['nombre']}")
-
-            with st.expander("Editar cuadro"):
-                nuevo_tipo = st.selectbox("Tipo", ["CGBT", "CS", "CT", "CC"], index=["CGBT", "CS", "CT", "CC"].index(row["tipo"]), key=f"edit_tipo_{cuadro_id}")
-                nuevo_numero = st.number_input("Número", value=row["numero"], min_value=0, max_value=100, key=f"edit_numero_{cuadro_id}")
-                nuevo_nombre = st.text_input("Nombre", value=row["nombre"], key=f"edit_nombre_{cuadro_id}")
-                
-                if st.button("Guardar cambios", key=f"guardar_edicion_{cuadro_id}"):
-                    actualizar_datos = {
-                        "tipo": nuevo_tipo,
-                        "numero": nuevo_numero,
-                        "nombre": nuevo_nombre,
-                        "ultimo_usuario": st.session_state["usuario"],
-                        "ultima_modificacion": datetime.now(timezone.utc).isoformat()
-                    }
-                    supabase.table('cuadros').update(actualizar_datos).eq('id', cuadro_id).execute()
-                    st.success("Cuadro actualizado correctamente.")
-                    st.rerun()
-
-            # Mostrar defectos actuales
-            defectos_registrados = row.get("defectos", [])
-            if defectos_registrados is None:
-                defectos_registrados = []
-
-            key_editar = f"editar_defectos_{cuadro_id}"
-            if key_editar not in st.session_state:
-                st.session_state[key_editar] = False
-
-            
-
-            if not st.session_state[key_editar]:
-                if defectos_registrados:
-                    # Mostrar defectos actuales
-                    st.write("Defectos actuales:")
-                    st.write("**Generales:**")
-                    st.write("\n".join(renderizar_defectos(defectos_generales, defectos_registrados)))
-                    st.write("**Tierras:**")
-                    st.write("\n".join(renderizar_defectos(defectos_tierras, defectos_registrados)))
-                    st.write("**Emergencias:**")
-                    st.write("\n".join(renderizar_defectos(defectos_emergencias, defectos_registrados)))
-                else:
-                    st.write("No hay defectos registrados.")
-
-                # Botón para iniciar edición
-                if st.button("Editar defectos", key=f"btn_editar_{cuadro_id}"):
-                    st.session_state[key_editar] = True
-                    st.rerun()
-            else:
-                # Sección de edición
-                st.write("Editar defectos:")
-                
-
-                mostrar_checkboxes(defectos_generales, "Generales")
-                mostrar_checkboxes(defectos_tierras, "Tierras")
-                mostrar_checkboxes(defectos_emergencias, "Emergencias")
-
-                col_guardar, col_cancelar = st.columns(2)
-                with col_guardar:
-                    if st.button(f"Guardar defectos para cuadro", key=f"guardar_defectos_{cuadro_id}"):
-                        defectos_finales = []
-                        for defecto in defectos_seleccionados:
-                            if defecto in detalles and detalles[defecto].strip():
-                                defecto_con_detalle = f"{defecto}_{detalles[defecto].strip()}"
-                                defectos_finales.append(defecto_con_detalle)
-                            else:
-                                defectos_finales.append(defecto)
-
-                        actualizar_defectos(cuadro_id, defectos_finales)
-                        st.success("Defectos actualizados correctamente.")
-                        st.session_state[key_editar] = False
-                        st.rerun()
-
-                with col_cancelar:
-                    if st.button("Cancelar edición", key=f"cancelar_defectos_{cuadro_id}"):
-                        st.session_state[key_editar] = False
-                        st.rerun()
-
-            # Campos para eliminar el cuadro
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                if st.button("Eliminar cuadro", key=f"eliminar_btn_{cuadro_id}"):
-                    eliminar_cuadro(cuadro_id)
-                    st.success(f"Cuadro '{row['nombre']}' eliminado.")
-                    st.rerun()
-            st.divider()
-    
-
-    if st.button("Generar BRA"):
+    with c2:
+        if st.button("Informe Aislamientos"):
+            try:
+                obtener_word_aislamientos(centro_id)
+            except ValueError as e:
+                st.error(str(e))
+    with c3:
+        if st.button("Informe BRA"):
             generar_informe_word_bra(centro_id)
 
-    # Opción para agregar nuevos cuadros
-    st.subheader("Añadir Cuadro Eléctrico")
-    tipo = st.selectbox("Tipo", ["CGBT", "CS", "CT", "CC"], key="tipo_nuevo")
-    numero = st.number_input("Número del cuadro", key="numero_nuevo", min_value=0, max_value=100, step=1) 
-    nombre = st.text_input("Nombre del cuadro", key="nombre_nuevo")
-    usuario = st.session_state['usuario']
+def pantalla_gestion_cuadros():
+    centro_id = st.session_state["centro_seleccionado"]
+    usuario = st.session_state["usuario"]
 
-    with st.expander("Añadir defectos"):  
-        mostrar_checkboxes_nuevo(defectos_generales, "Generales")
-        mostrar_checkboxes_nuevo(defectos_tierras, "Tierras")
-        mostrar_checkboxes_nuevo(defectos_emergencias, "Emergencias")
+    if st.session_state.get("limpiar_form"):
+            claves = ["ntipo","nnum","nnom","ntierra","naisla"]
+            claves += [k for k in st.session_state if k.startswith("new_d_") or k.startswith("new_dt_")]
+            for k in claves:
+                st.session_state.pop(k, None)
+    # ——— Navegación ———
+    if st.button("Cerrar sesión"):
+        cerrar_sesion()
+        st.rerun()
 
-        
-        def limpiar_campos():
-        # Eliminar las claves asociadas con los checkboxes y el campo de nombre
-            for k in list(st.session_state.keys()):
-                if k.startswith("defecto_nuevo_") or k.startswith("detalle_nuevo_") or k in ["nombre_nuevo", "numero_nuevo", "tipo_nuevo"]:
-                    del st.session_state[k]
-        
-        
-
-
-    if st.button("Añadir Cuadro", key="añadir_cuadro"):
-        if nombre:
-            try:
-                # Procesar la adición del cuadro
-                agregar_cuadro(centro_id, tipo, nombre, numero, usuario, 0, 0)
-                respuesta = supabase.table("cuadros")\
-                    .select("id")\
-                    .eq("nombre", nombre)\
-                    .eq("numero", numero)\
-                    .eq("centro_id", centro_id)\
-                    .execute()
-                
-                cuadro_id = respuesta.data[0]["id"]
-
-                defectos_finales = []
-                for defecto in defectos_seleccionados:
-                    if defecto in detalles and detalles[defecto].strip():
-                        defecto_con_detalle = f"{defecto}_{detalles[defecto].strip()}"
-                        defectos_finales.append(defecto_con_detalle)
-                    else:
-                        defectos_finales.append(defecto)
-                actualizar_defectos(cuadro_id, defectos_finales)
-
-                # Limpiar todos los campos y volver a renderizar
-                limpiar_campos()
-
-                # Limpiar específicamente los checkboxes y el campo nombre
-                for defecto in defectos_generales + defectos_tierras + defectos_emergencias:
-                    st.session_state[f"defecto_nuevo_{defecto}"] = False
-                st.session_state["nombre_nuevo"] = ""  # Limpiar el nombre del cuadro
-
-                st.rerun()
-
-            except ValueError as e:
-                st.error(str(e))
-        else:
-            st.warning("Debes completar todos los campos")
-
-
-def pantalla_gestion(): 
-    col1, col2, col3 = st.columns(3)
-    with col1:     
-        if st.button("Cerrar sesión"):
-            cerrar_sesion()
-            st.rerun()         
-    with col2:
-        if st.button("Volver al listado"):
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("← Volver a Listado de Centros"):
             st.session_state["pagina"] = "inicio"
-            st.session_state["centro_seleccionado"] = None
-            guardar_estado_sesion(st.session_state["usuario"],st.session_state["pagina"],st.session_state["centro_seleccionado"], None)
+            guardar_estado_sesion(usuario, "inicio", None, None)
             st.rerun()
-    
-    with col3: 
-        if not st.session_state["subpagina"] == None:
-            if st.button("Volver al selector de gestión"):
-                st.session_state["pagina"] = "gestion"
-                st.session_state["subpagina"] = None
-                guardar_estado_sesion(st.session_state["usuario"],st.session_state["pagina"],st.session_state["centro_seleccionado"], None)
-                st.rerun()       
-    # Selector de gestion
-    
-    if st.session_state["subpagina"] == "mediciones":
-        pantalla_mediciones()
-    elif st.session_state["subpagina"] == "defectos":
-        pantalla_defectos()
-    else: 
-        col1, col2, col3 = st.columns([1, 2, 1])  # Proporciones: centro más ancho
+    with col2:
+        if st.button("← Volver a Gestión de Centro"):
+            st.session_state["pagina"] = "gestion"
+            guardar_estado_sesion(usuario, "gestion", centro_id, None)
+            st.rerun()
 
-        with col2:   
-            st.subheader(st.session_state["nombre_centro"])
-            if st.button("Gestionar Mediciones", use_container_width=True):
-                st.session_state["subpagina"] = "mediciones"
+    st.title(f"Gestión de Cuadros — {st.session_state['nombre_centro']}")
+
+    # ——— Listado y edición de cuadros existentes ———
+    df = obtener_cuadros(centro_id)
+    generales = [
+        "PUNTERAS", "PEGATINA", "CIR SIN IDENTIFICAR", "OBTURADORES",
+        "IDENTIF. COLORES", "SIN DIFERENCIAL", "DIFEREN NO ACTUA",
+        "SELECTIVIDAD", "PROTECCION CONTRA SOBRECARGAS", "CERRADURA",
+        "EMPALMES", "SECCIÓN INADECUADA", "SIN CORTE GENERAL",
+        "AISLAMIENTO", "ARROLLAMIENTO", "CABLES SIN CANALIZAR",
+        "CANALIZACIONES", "MAL ESTADO", "POLARIDAD INVERTIDA",
+        "NO LEGIBLE", "CONT. DIRECTO", "TENSION CONTACTO",
+        "GRUPO ELECTROGENO"
+    ]
+    tierras = ["PUERTAS/CHASIS", "MECANISMOS", "CUADRO", "MEDICION ELEVADA"]
+    emergencias = ["NO HAY EMERGENCIA", "FALLA EMERGENCIA"]
+
+    def renderizar(defs_cat, regs):
+        out = []
+        for d in defs_cat:
+            for r in regs:
+                if r.startswith(d):
+                    texto = r.replace("_", " (", 1) + (")" if "_" in r else "")
+                    out.append(f"- {texto}")
+        return "\n".join(out)
+
+    for _, row in df.iterrows():
+        cid = row["id"]
+        st.subheader(f"{row['tipo']} {row['numero']} – {row['nombre']}")
+        with st.expander("Editar cuadro"):
+                tipo_edit = st.selectbox(
+                    "Tipo",
+                    ["CGBT","CS","CT","CC"],
+                    index=["CGBT","CS","CT","CC"].index(row["tipo"]),
+                    key=f"edit_tipo_{cid}"
+                )
+                numero_edit = st.number_input(
+                    "Número",
+                    value=row["numero"],
+                    min_value=0, max_value=100, step=1,
+                    key=f"edit_numero_{cid}"
+                )
+                nombre_edit = st.text_input(
+                    "Nombre",
+                    value=row["nombre"],
+                    key=f"edit_nombre_{cid}"
+                )
+                if st.button("Guardar cambios", key=f"edit_cuadro_{cid}"):
+                    supabase.from_("cuadros").update({
+                        "tipo": tipo_edit,
+                        "numero": numero_edit,
+                        "nombre": nombre_edit,
+                        "ultimo_usuario": usuario,
+                        "ultima_modificacion": datetime.now(ZoneInfo("Europe/Madrid")).isoformat()
+                    }).eq("id", cid).execute()
+                    st.success("Cuadro actualizado.")
+                    st.rerun()
+        st.write(f"Tierra: {row['tierra_ohmnios'] or 0.0} Ω")
+        st.write(f"Aislamiento: {row['aislamiento_megaohmnios'] or 0.0} MΩ")
+
+        regs = row.get("defectos") or []
+        st.write("**Defectos actuales:**")
+        st.write("Generales:\n"   + renderizar(generales,    regs))
+        st.write("Tierras:\n"     + renderizar(tierras,      regs))
+        st.write("Emergencias:\n" + renderizar(emergencias,  regs))
+
+        def cb_tierra(cuadro_id, user):
+            val = st.session_state[f"t_{cuadro_id}"]
+            actualizar_tierra(cuadro_id, val, user)
+
+        def cb_aisla(cuadro_id, user):
+            val = st.session_state[f"a_{cuadro_id}"]
+            actualizar_aislamiento(cuadro_id, val, user)
+
+        with st.expander("Editar mediciones"):
+            t = st.number_input(
+                "Tierra (Ω)",
+                value=row["tierra_ohmnios"] or 0.0,
+                min_value=0.0, step=1.0,
+                key=f"t_{cid}",
+                on_change=cb_tierra,
+                args=(cid, usuario)
+            )
+            a = st.number_input(
+                "Aislamiento (MΩ)",
+                value=row["aislamiento_megaohmnios"] or 0.0,
+                min_value=0.0, step=1.0,
+                key=f"a_{cid}",
+                on_change=cb_aisla,
+                args=(cid, usuario)
+            )
+            if st.button("Guardar mediciones", key=f"gm_{cid}"):
+                actualizar_tierra(cid, t, usuario)
+                actualizar_aislamiento(cid, a, usuario)
+                st.success("Mediciones actualizadas.")
                 st.rerun()
-            if st.button("Gestionar Defectos", use_container_width=True):
-                st.session_state["subpagina"] = "defectos"
-                st.rerun()     
+
+        def cb_defectos(cuadro_id, user):
+            seleccion = []
+            # recorremos todas las categorías
+            for d in generales + tierras + emergencias:
+                if st.session_state.get(f"d_{cuadro_id}_{d}", False):
+                    detalle = st.session_state.get(f"dt_{cuadro_id}_{d}", "").strip()
+                    if detalle:
+                        seleccion.append(f"{d}_{detalle}")
+                    else:
+                        seleccion.append(d)
+            actualizar_defectos(cuadro_id, seleccion)
+
+        with st.expander("Editar defectos"):
+            seleccionados = []
+            detalles = {}
+            for d in generales + tierras + emergencias:
+                chk = st.checkbox(
+                    d,
+                    value=any(r.startswith(d) for r in regs),
+                    key=f"d_{cid}_{d}",
+                    on_change=cb_defectos,
+                    args=(cid, usuario)
+                )
+                if chk:
+                    seleccionados.append(d)
+                    # Solo pido detalle si el defecto puede llevarlo
+                    detalles[d] = st.text_area(
+                        f"Detalle {d}",
+                        value=next((r.split("_",1)[1] for r in regs if r.startswith(f"{d}_")), ""),
+                        key=f"dt_{cid}_{d}"
+                    )
+            if st.button("Guardar defectos", key=f"gd_{cid}"):
+                finales = [
+                    f"{d}_{detalles[d].strip()}" if detalles[d].strip() else d
+                    for d in seleccionados
+                ]
+                actualizar_defectos(cid, finales)
+                st.success("Defectos actualizados.")
+                st.rerun()
+
+        if st.button("Eliminar cuadro", key=f"del_{cid}"):
+            eliminar_cuadro(cid)
+            st.success("Cuadro eliminado.")
+            st.rerun()
+
+        st.divider()
+
+    # ——— Añadir nuevo cuadro con dos expanders ———
+    st.subheader("Añadir nuevo cuadro")
+    def limpiar_campos_nuevo():
+        # 1) Campos básicos
+        for key in ("ntipo", "nnum", "nnom", "ntierra", "naisla"):
+            st.session_state.pop(key, None)
+
+        # 2) Checkboxes y text_areas de defectos “vivos”
+        for d in generales + tierras + emergencias:
+            st.session_state.pop(f"new_d_{d}", None)
+            st.session_state.pop(f"new_dt_{d}", None)
+    # 1) Campos básicos
+    t0 = st.selectbox("Tipo", ["CGBT","CS","CT","CC"], key="ntipo")
+    n0 = st.number_input("Número", min_value=0, max_value=100, step=1, key="nnum")
+    nm = st.text_input("Nombre", key="nnom")
+
+    with st.expander("Añadir mediciones"):
+        t1 = st.number_input("Tierra (Ω)",min_value=0.0, step=1.0,value=0.0, key="ntierra")
+        a1 = st.number_input("Aislamiento (MΩ)",min_value=0.0, step=1.0, value=0.0, key="naisla")
+
+    # 2) Defectos como widgets “vivos”
+    with st.expander("Añadir defectos"):
+        defectos_nuevos = []
+        detalles_nuevos = {}
+
+        st.markdown("### 🔧 Generales")
+        for d in generales:
+            marcado = st.checkbox(d, key=f"new_d_{d}", value=False)
+            if marcado:
+                defectos_nuevos.append(d)
+                detalles_nuevos[d] = st.text_area(f"Detalle para {d}", key=f"new_dt_{d}")
+
+        st.markdown("### 🌍 Puesta a tierra")
+        for d in tierras:
+            marcado = st.checkbox(d, key=f"new_d_{d}", value=False)
+            if marcado:
+                defectos_nuevos.append(d)
+                detalles_nuevos[d] = st.text_area(f"Detalle para {d}", key=f"new_dt_{d}")
+
+        st.markdown("### 🚨 Alumbrado de emergencia")
+        for d in emergencias:
+            marcado = st.checkbox(d, key=f"new_d_{d}", value=False)
+            if marcado:
+                defectos_nuevos.append(d)
+                detalles_nuevos[d] = st.text_area(f"Detalle para {d}", key=f"new_dt_{d}")
+
+
+    # 3) Al pulsar “Añadir cuadro” guardas cuadro + defectos
+    if st.button("Añadir cuadro"):
+        agregar_cuadro(centro_id, t0, nm, n0, usuario, t1, a1)
+        # recuperas new_id…
+        respuesta = ( supabase
+        .from_("cuadros")
+        .select("id")
+        .eq("centro_id", centro_id)
+        .eq("nombre", nm)
+        .eq("numero", n0)
+        .eq("tierra_ohmnios", t1)
+        .eq("aislamiento_megaohmnios", a1)
+        .single()
+        .execute()
+        )
+        new_id = respuesta.data["id"] if respuesta.data else None
+
+        # 3) Aquí se crea defectos_finales
+        if new_id is not None:
+            defectos_finales = []
+            for d in defectos_nuevos:
+                detalle = detalles_nuevos.get(d, "").strip()
+                if detalle:
+                    defectos_finales.append(f"{d}_{detalle}")
+                else:
+                    defectos_finales.append(d)
+            actualizar_defectos(new_id, defectos_finales)
+            defectos_finales = []
+            defectos_nuevos = []
+            detalles_nuevos = {}
+            st.success("Cuadro y defectos añadidos.")
+            limpiar_campos_nuevo()
+        for d in generales + tierras + emergencias:
+            st.session_state[f"new_d_{d}"] = False
+            st.session_state[f"new_dt_{d}"] = False   
+            st.session_state["nnom"]=""
+            st.session_state["ntierra"]=0.0
+            st.session_state["naisla"]=0.0    
+    # 4) Limpiar campos
+        
+        st.rerun()       
