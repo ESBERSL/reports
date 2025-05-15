@@ -1,7 +1,7 @@
 import streamlit as st
 from supabase import create_client, Client
 from zoneinfo import ZoneInfo
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 
 from auth import guardar_estado_sesion, cerrar_sesion
@@ -29,7 +29,7 @@ supabase: Client = create_client(url, key)
 def pantalla_inicio():
     st.title("Lista de Centros")
     if st.button("Cerrar sesión"):
-        cerrar_sesion()
+        cerrar_sesion(st.session_state["jwt"])
         st.rerun()
 
     # Filtros
@@ -49,7 +49,7 @@ def pantalla_inicio():
                 "nombre_centro": row["nombre"],
                 "pagina": "gestion"
             })
-            guardar_estado_sesion(st.session_state["usuario"], "gestion", row["id"], None)
+            guardar_estado_sesion(st.session_state["jwt"], "gestion", row["id"], None)
             st.rerun()
 
 
@@ -89,13 +89,13 @@ def pantalla_gestion():
     datos = fila.iloc[0].to_dict() if not fila.empty else {}
 # ——— Navegación ———
     if st.button("Cerrar sesión"):
-            cerrar_sesion()
+            cerrar_sesion(st.session_state["jwt"])
             st.rerun()
     col1, col2 = st.columns(2)
     with col1:
         if st.button("← Volver a Listado de Centros"):
             st.session_state["pagina"] = "inicio"
-            guardar_estado_sesion(usuario, "inicio", None, None)
+            guardar_estado_sesion(st.session_state["jwt"], "inicio", None, None)
             st.rerun()
 
     # Datos editables
@@ -149,10 +149,10 @@ def pantalla_gestion():
             # Actualizamos estado y salvamos en sesión
             st.session_state["pagina"] = "gestion_cuadros"
             guardar_estado_sesion(
-                st.session_state["usuario"],
+                 st.session_state["jwt"],
                 "gestion_cuadros",
                 centro_id,
-                None
+                None,
             )
             st.rerun()    
 
@@ -187,22 +187,31 @@ def pantalla_gestion_cuadros():
                 st.session_state.pop(k, None)
     # ——— Navegación ———
     if st.button("Cerrar sesión"):
-        cerrar_sesion()
+        cerrar_sesion(st.session_state["jwt"])
         st.rerun()
 
     col1, col2 = st.columns(2)
     with col1:
         if st.button("← Volver a Listado de Centros"):
             st.session_state["pagina"] = "inicio"
-            guardar_estado_sesion(usuario, "inicio", None, None)
+            guardar_estado_sesion(st.session_state["jwt"], "inicio", None, None)
             st.rerun()
     with col2:
         if st.button("← Volver a Gestión de Centro"):
             st.session_state["pagina"] = "gestion"
-            guardar_estado_sesion(usuario, "gestion", centro_id, None)
+            guardar_estado_sesion(st.session_state["jwt"], "gestion", centro_id, None)
             st.rerun()
-
-    st.title(f"Gestión de Cuadros — {st.session_state['nombre_centro']}")
+    try:
+        response = supabase.table('centros') \
+                        .select('nombre') \
+                        .eq('id', st.session_state['centro_seleccionado']) \
+                        .single() \
+                        .execute()
+        if response.data:
+            nombre_centr = response.data['nombre']
+    except Exception as e:
+        st.error(f"Error al obtener el nombre del centro: {e}")
+    st.title(f"Gestión de Cuadros — {nombre_centr}")
 
     # ——— Listado y edición de cuadros existentes ———
     df = obtener_cuadros(centro_id)
