@@ -143,11 +143,13 @@ def generar_informe_word_aislamientos(centro_id):
     fecha_actual = datetime.now()
 
     df_cuadros = obtener_cuadros(centro_id)
-    medidas_tierra = df_cuadros["aislamiento_megaohmnios"].tolist()
+    medidas_aislamiento = df_cuadros["aislamiento_megaohmnios"].tolist()
 
-    # Analizar la medición más alta y comparar con 1
-    medida_maxima = min(medidas_tierra)
-    informe_estado = "Favorable" if medida_maxima >= 1 else "Desfavorable"
+    # Analizar la medición más baja y comparar con 1
+    medidas_aislamiento = [m for m in medidas_aislamiento if m > 0]
+    medida_minima = min(medidas_aislamiento)
+    print(medidas_aislamiento)
+    informe_estado = "Favorable" if medida_minima >= 1 else "Desfavorable"
 
     reemplazos = {
         "[NOMBRE]": nombre_centro,
@@ -206,7 +208,7 @@ def generar_informe_word_aislamientos(centro_id):
         else:
             row_cells[0].text = f"{str(row['tipo'])}-{str(row['numero'])}" 
         row_cells[1].text = row['nombre']
-        row_cells[2].text = str(row['tierra_ohmnios']) if row['tierra_ohmnios'] is not None else 'N/A'
+        row_cells[2].text = str(row['aislamiento_megaohmnios']) if row['aislamiento_megaohmnios'] is not None else 'N/A'
 
     # Guardar el documento en memoria
     
@@ -232,6 +234,7 @@ def generar_informe_word_aislamientos(centro_id):
 
 
 PLANTILLA_BRA = "BASE_BRA.docx" 
+PLANTILLA_BRA_SD = "BASE_BRA_SD.docx"
 
 def generar_informe_word_bra(centro_id):
 
@@ -241,7 +244,10 @@ def generar_informe_word_bra(centro_id):
     "September": "septiembre", "October": "octubre", "November": "noviembre", "December": "diciembre"
     }
 
-    doc = Document(PLANTILLA_BRA)
+    defectos = obtener_defectos(centro_id) or []
+    plantilla = PLANTILLA_BRA if defectos else PLANTILLA_BRA_SD
+    doc = Document(plantilla)
+    
     datos_centro = obtener_datos_centro(centro_id)
     fecha_actual = datetime.now()
     nombre_centro = datos_centro.get("nombre", "Desconocido")
@@ -328,7 +334,7 @@ def generar_informe_word_bra(centro_id):
             p = row_cells[0].paragraphs[0]
 
             if tipo == 'CGBT':
-                run = p.add_run(str(tipo))
+                run = p.add_run(str(cuadro))
             elif numero <= 9:
                 run = p.add_run(f"{tipo}-0{numero} {cuadro}")
             else:
@@ -360,7 +366,14 @@ def generar_informe_word_bra(centro_id):
     
 # Función para obtener el archivo Word generado
 def obtener_word_tierras(centro_id):
+    df_cuadros = obtener_cuadros(centro_id)
+    if df_cuadros.empty:
+        raise ValueError(f"No hay cuadros creados en el centro para generar el informe de tierras.")
     return generar_informe_word_tierras(centro_id)
 
+
 def obtener_word_aislamientos(centro_id):
+    df_cuadros = obtener_cuadros(centro_id)
+    if df_cuadros.empty:
+        raise ValueError(f"No hay cuadros creados en el centro para generar el informe de aislamientos.")
     return generar_informe_word_aislamientos(centro_id)
