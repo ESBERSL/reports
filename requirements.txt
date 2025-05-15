@@ -8,3 +8,7 @@ python-docx
 reportlab
 pdfkit
 streamlit_cookies_manager
+pandas
+datetime
+docx
+Pyjwt
