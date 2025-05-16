@@ -16,8 +16,14 @@ def obtener_centros():
 # Función para obtener los cuadros eléctricos de un centro
 def obtener_cuadros(centro_id):
     response = supabase.table('cuadros').select('*').eq('centro_id', centro_id).execute()
-    
-    return pd.DataFrame(response.data)
+    df = pd.DataFrame(response.data)
+    if not df.empty:
+    # Definimos el orden de tipos
+        orden_tipo = {"CGBT": 0, "CS": 1, "CT": 2, "CC": 3}
+        # Añadimos columna auxiliar para orden
+        df["orden_tipo"] = df["tipo"].map(orden_tipo).fillna(99)
+        df = df.sort_values(by=["orden_tipo", "numero"]).reset_index(drop=True)
+    return df
 
 
 
