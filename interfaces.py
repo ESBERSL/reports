@@ -3,8 +3,8 @@ from supabase import create_client, Client
 from zoneinfo import ZoneInfo
 from datetime import datetime
 import pandas as pd
-
-from auth import guardar_estado_sesion, cerrar_sesion
+from cookies import cerrar_sesion
+from auth import guardar_estado_sesion
 from database import (
     obtener_centros,
     obtener_cuadros,
@@ -29,7 +29,7 @@ supabase: Client = create_client(url, key)
 def pantalla_inicio():
     st.title("Lista de Centros")
     if st.button("Cerrar sesión"):
-        cerrar_sesion()
+        cerrar_sesion(st.session_state["usuario"])
         st.rerun()
 
     # Filtros
@@ -89,7 +89,7 @@ def pantalla_gestion():
     datos = fila.iloc[0].to_dict() if not fila.empty else {}
 # ——— Navegación ———
     if st.button("Cerrar sesión"):
-            cerrar_sesion()
+            cerrar_sesion(st.session_state["usuario"])
             st.rerun()
     col1, col2 = st.columns(2)
     with col1:
@@ -187,7 +187,7 @@ def pantalla_gestion_cuadros():
                 st.session_state.pop(k, None)
     # ——— Navegación ———
     if st.button("Cerrar sesión"):
-        cerrar_sesion()
+        cerrar_sesion(st.session_state["usuario"])
         st.rerun()
 
     col1, col2 = st.columns(2)
