@@ -255,7 +255,7 @@ def pantalla_gestion_cuadros():
                         "numero": numero_edit,
                         "nombre": nombre_edit,
                         "ultimo_usuario": usuario,
-                        "ultima_modificacion": datetime.now(ZoneInfo("Europe/Madrid")).isoformat()
+                        "ultima_modificacion": datetime.now().isoformat()
                     }).eq("id", cid).execute()
                     st.success("Cuadro actualizado.")
                     st.rerun()
