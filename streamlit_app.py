@@ -38,7 +38,7 @@ if "pagina" not in st.session_state:
            
 
 def ahora_es():
-    return datetime.now(ZoneInfo("Europe/Madrid"))
+    return datetime.now()
 
 
 def pantalla_login():
