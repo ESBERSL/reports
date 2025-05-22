@@ -87,8 +87,10 @@ else:
                     resp = supabase.table("sesiones").select("*").eq("username", username).execute()
                     if resp.data:
                         sesion = resp.data[0]
-                        ahora = ahora_es()
+                        ahora = ahora_es().astimezone(timezone.utc)
                         ultima = datetime.fromisoformat(sesion["timestamp"])
+                        if ultima.tzinfo is None:
+                            ultima = ultima.replace(tzinfo=timezone.utc)
                         if (ahora - ultima).total_seconds() <= 8 * 3600:
                             st.session_state.update({
                                 "autenticado": True,
