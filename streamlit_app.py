@@ -88,7 +88,7 @@ else:
                     if resp.data:
                         sesion = resp.data[0]
                         ahora = ahora_es()
-                        ultima = datetime.fromisoformat(sesion["timestamp"]).astimezone(ZoneInfo("Europe/Madrid"))
+                        ultima = datetime.fromisoformat(sesion["timestamp"])
                         if (ahora - ultima).total_seconds() <= 8 * 3600:
                             st.session_state.update({
                                 "autenticado": True,
