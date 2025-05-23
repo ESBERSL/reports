@@ -54,6 +54,7 @@ def pantalla_inicio():
 
 
 def pantalla_gestion():
+    
     st.header(f"Centro: {st.session_state.get('nombre_centro','')}")
     centro_id = st.session_state["centro_seleccionado"]
     usuario = st.session_state["usuario"]
@@ -179,12 +180,19 @@ def pantalla_gestion():
 def pantalla_gestion_cuadros():
     centro_id = st.session_state["centro_seleccionado"]
     usuario = st.session_state["usuario"]
+    generales = [
+    "PUNTERAS", "PEGATINA", "CIR SIN IDENTIFICAR", "OBTURADORES",
+    "IDENTIF. COLORES", "SIN DIFERENCIAL", "DIFEREN NO ACTUA",
+    "SELECTIVIDAD", "PROTECCION CONTRA SOBRECARGAS", "CERRADURA",
+    "EMPALMES", "SECCIÓN INADECUADA", "SIN CORTE GENERAL",
+    "AISLAMIENTO", "ARROLLAMIENTO", "CABLES SIN CANALIZAR",
+    "CANALIZACIONES", "MAL ESTADO", "POLARIDAD INVERTIDA",
+    "NO LEGIBLE", "CONT. DIRECTO", "TENSION CONTACTO",
+    "GRUPO ELECTROGENO"
+]
+    tierras = ["PUERTAS/CHASIS", "MECANISMOS", "CUADRO", "MEDICION ELEVADA"]
+    emergencias = ["NO HAY EMERGENCIA", "FALLA EMERGENCIA"]
 
-    if st.session_state.get("limpiar_form"):
-            claves = ["ntipo","nnum","nnom","ntierra","naisla"]
-            claves += [k for k in st.session_state if k.startswith("new_d_") or k.startswith("new_dt_")]
-            for k in claves:
-                st.session_state.pop(k, None)
     # ——— Navegación ———
     if st.button("Cerrar sesión"):
         cerrar_sesion()
@@ -206,18 +214,7 @@ def pantalla_gestion_cuadros():
 
     # ——— Listado y edición de cuadros existentes ———
     df = obtener_cuadros(centro_id)
-    generales = [
-    "PUNTERAS", "PEGATINA", "CIR SIN IDENTIFICAR", "OBTURADORES",
-    "IDENTIF. COLORES", "SIN DIFERENCIAL", "DIFEREN NO ACTUA",
-    "SELECTIVIDAD", "PROTECCION CONTRA SOBRECARGAS", "CERRADURA",
-    "EMPALMES", "SECCIÓN INADECUADA", "SIN CORTE GENERAL",
-    "AISLAMIENTO", "ARROLLAMIENTO", "CABLES SIN CANALIZAR",
-    "CANALIZACIONES", "MAL ESTADO", "POLARIDAD INVERTIDA",
-    "NO LEGIBLE", "CONT. DIRECTO", "TENSION CONTACTO",
-    "GRUPO ELECTROGENO"
-]
-    tierras = ["PUERTAS/CHASIS", "MECANISMOS", "CUADRO", "MEDICION ELEVADA"]
-    emergencias = ["NO HAY EMERGENCIA", "FALLA EMERGENCIA"]
+    
 
     def renderizar(defs_cat, regs):
         out = []
@@ -267,7 +264,7 @@ def pantalla_gestion_cuadros():
         st.write("Generales:\n"   + renderizar(generales,    regs))
         st.write("Tierras:\n"     + renderizar(tierras,      regs))
         st.write("Emergencias:\n" + renderizar(emergencias,  regs))
-
+        st.write("Anotaciones:\n" + (row.get("anotaciones") or ""))
         def cb_tierra(cuadro_id, user):
             val = st.session_state[f"t_{cuadro_id}"]
             actualizar_tierra(cuadro_id, val, user)
@@ -346,71 +343,60 @@ def pantalla_gestion_cuadros():
 
         st.divider()
 
-    # ——— Añadir nuevo cuadro con dos expanders ———
-    st.subheader("Añadir nuevo cuadro")
-    def limpiar_campos_nuevo():
-        # 1) Campos básicos
-        for key in ("ntipo", "nnum", "nnom", "ntierra", "naisla"):
-            st.session_state.pop(key, None)
-
-        # 2) Checkboxes y text_areas de defectos “vivos”
-        for d in generales + tierras + emergencias:
-            st.session_state.pop(f"new_d_{d}", None)
-            st.session_state.pop(f"new_dt_{d}", None)
+   
     # 1) Campos básicos
-    t0 = st.selectbox("Tipo", ["CGBT","CS","CT","CC"], key="ntipo")
-    n0 = st.number_input("Número", min_value=0, max_value=100, step=1, key="nnum")
-    nm = st.text_input("Nombre", key="nnom")
+    st.subheader("Añadir nuevo cuadro")
 
-    with st.expander("Añadir mediciones"):
-        t1 = st.number_input("Tierra (Ω)",min_value=0.0, step=1.0,value=0.0, key="ntierra")
-        a1 = st.number_input("Aislamiento (MΩ)",min_value=0.0, step=1.0, value=0.0, key="naisla")
+    # --- FORMULARIO SOLO SI NO ESTAMOS LIMPIANDO ---
+    with st.form("form_nuevo_cuadro"):
+        t0 = st.selectbox("Tipo", ["CGBT", "CS", "CT", "CC"], key="ntipo")
+        n0 = st.number_input("Número", min_value=0, max_value=100, step=1, key="nnum")
+        nm = st.text_input("Nombre", key="nnom")
+        with st.expander("Añadir mediciones"):
+            t1 = st.number_input("Tierra (Ω)", min_value=0.0, step=1.0, value=0.0, key="ntierra")
+            a1 = st.number_input("Aislamiento (MΩ)", min_value=0.0, step=1.0, value=0.0, key="naisla")
+        with st.expander("Añadir defectos"):
+            defectos_nuevos = []
+            detalles_nuevos = {}
 
-    # 2) Defectos como widgets “vivos”
-    with st.expander("Añadir defectos"):
-        defectos_nuevos = []
-        detalles_nuevos = {}
+            st.markdown("### 🔧 Generales")
+            for d in generales:
+                marcado = st.checkbox(d, key=f"new_d_{d}", value=False)
+                if marcado:
+                    defectos_nuevos.append(d)
 
-        st.markdown("### 🔧 Generales")
-        for d in generales:
-            marcado = st.checkbox(d, key=f"new_d_{d}", value=False)
-            if marcado:
-                defectos_nuevos.append(d)
-                detalles_nuevos[d] = st.text_area(f"Detalle para {d}", key=f"new_dt_{d}")
+            st.markdown("### 🌍 Puesta a tierra")
+            for d in tierras:
+                marcado = st.checkbox(d, key=f"new_d_{d}", value=False)
+                if marcado:
+                    defectos_nuevos.append(d)
 
-        st.markdown("### 🌍 Puesta a tierra")
-        for d in tierras:
-            marcado = st.checkbox(d, key=f"new_d_{d}", value=False)
-            if marcado:
-                defectos_nuevos.append(d)
-                detalles_nuevos[d] = st.text_area(f"Detalle para {d}", key=f"new_dt_{d}")
+            st.markdown("### 🚨 Alumbrado de emergencia")
+            for d in emergencias:
+                marcado = st.checkbox(d, key=f"new_d_{d}", value=False)
+                if marcado:
+                    defectos_nuevos.append(d)
+        with st.expander("Anotaciones"):
+            anotaciones_nuevo = st.text_area("Anotaciones", key="new_anotaciones", value=" ")
 
-        st.markdown("### 🚨 Alumbrado de emergencia")
-        for d in emergencias:
-            marcado = st.checkbox(d, key=f"new_d_{d}", value=False)
-            if marcado:
-                defectos_nuevos.append(d)
-                detalles_nuevos[d] = st.text_area(f"Detalle para {d}", key=f"new_dt_{d}")
+        submit = st.form_submit_button("Añadir cuadro")
 
-
-    # 3) Al pulsar “Añadir cuadro” guardas cuadro + defectos
-    if st.button("Añadir cuadro"):
-        agregar_cuadro(centro_id, t0, nm, n0, usuario, t1, a1)
-        # recuperas new_id…
-        respuesta = ( supabase
-        .from_("cuadros")
-        .select("id")
-        .eq("centro_id", centro_id)
-        .eq("nombre", nm)
-        .eq("numero", n0)
-        .eq("tierra_ohmnios", t1)
-        .eq("aislamiento_megaohmnios", a1)
-        .single()
-        .execute()
+    if submit:
+        agregar_cuadro(centro_id, t0, nm, n0, usuario, t1, a1, anotaciones_nuevo)
+        respuesta = (
+            supabase
+            .from_("cuadros")
+            .select("id")
+            .eq("centro_id", centro_id)
+            .eq("nombre", nm)
+            .eq("numero", n0)
+            .eq("tierra_ohmnios", t1)
+            .eq("aislamiento_megaohmnios", a1)
+            .single()
+            .execute()
         )
         new_id = respuesta.data["id"] if respuesta.data else None
 
-        # 3) Aquí se crea defectos_finales
         if new_id is not None:
             defectos_finales = []
             for d in defectos_nuevos:
@@ -420,17 +406,26 @@ def pantalla_gestion_cuadros():
                 else:
                     defectos_finales.append(d)
             actualizar_defectos(new_id, defectos_finales)
+            st.session_state["limpiar_form"] = True
             defectos_finales = []
             defectos_nuevos = []
             detalles_nuevos = {}
             st.success("Cuadro y defectos añadidos.")
-            limpiar_campos_nuevo()
+
         for d in generales + tierras + emergencias:
-            st.session_state[f"new_d_{d}"] = False
-            st.session_state[f"new_dt_{d}"] = False   
-            st.session_state["nnom"]=""
-            st.session_state["ntierra"]=0.0
-            st.session_state["naisla"]=0.0    
+            for key in ("ntipo", "nnum", "nnom", "ntierra", "naisla", "new_anotaciones"):
+                st.session_state.pop(key, None)
+            for d in generales + tierras + emergencias:
+                st.session_state.pop(f"new_d_{d}", None)
+                st.session_state.pop(f"new_dt_{d}", None)
+                st.session_state[f"new_d_{d}"] = False
+                st.session_state[f"new_dt_{d}"] = False   
+        st.session_state["nnom"]=""
+        st.session_state["new_anotaciones"]=""
+        st.session_state["ntierra"]=0.0
+        st.session_state["naisla"]=0.0        
     # 4) Limpiar campos
         
         st.rerun()       
+    
+

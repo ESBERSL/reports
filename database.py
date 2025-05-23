@@ -64,7 +64,7 @@ def obtener_defectos(centro_id):
 
 # Función para insertar un nuevo cuadro
 
-def agregar_cuadro(centro_id, tipo, nombre, numero, usuario, tierra, aislamiento):
+def agregar_cuadro(centro_id, tipo, nombre, numero, usuario, tierra, aislamiento, anotaciones):
     data = {
         "centro_id": centro_id,
         "tipo": tipo,
@@ -73,7 +73,8 @@ def agregar_cuadro(centro_id, tipo, nombre, numero, usuario, tierra, aislamiento
         "tierra_ohmnios": tierra,
         "aislamiento_megaohmnios": aislamiento,
         "ultimo_usuario": usuario,
-        "ultima_modificacion": datetime.now(timezone.utc).isoformat()
+        "ultima_modificacion": datetime.now(timezone.utc).isoformat(),
+        "anotaciones": anotaciones
         }
     response = supabase.table('cuadros').insert(data).execute()
     return response
