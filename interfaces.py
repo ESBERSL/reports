@@ -316,17 +316,10 @@ def pantalla_gestion_cuadros():
                     d,
                     value=any(r.startswith(d) for r in regs),
                     key=f"d_{cid}_{d}",
-                    on_change=cb_defectos,
                     args=(cid, usuario)
                 )
                 if chk:
                     seleccionados.append(d)
-                    # Solo pido detalle si el defecto puede llevarlo
-                    detalles[d] = st.text_area(
-                        f"Detalle {d}",
-                        value=next((r.split("_",1)[1] for r in regs if r.startswith(f"{d}_")), ""),
-                        key=f"dt_{cid}_{d}"
-                    )
             if st.button("Guardar defectos", key=f"gd_{cid}"):
                 finales = [
                     f"{d}_{detalles[d].strip()}" if detalles[d].strip() else d
@@ -335,6 +328,19 @@ def pantalla_gestion_cuadros():
                 actualizar_defectos(cid, finales)
                 st.success("Defectos actualizados.")
                 st.rerun()
+        with st.expander("Editar Anotaciones"):
+            anotaciones_edit = st.text_input(
+                    "Anotaciones",
+                    value=row["anotaciones"] or "",
+                    key=f"edit_anot_{cid}"
+                )
+            if st.button("Guardar anotaciones", key=f"edit_cuadro_anot_{cid}"):
+                    supabase.from_("cuadros").update({
+                        "anotaciones": anotaciones_edit,
+                    }).eq("id", cid).execute()
+                    st.success("Cuadro actualizado.")
+                    st.rerun()
+
 
         if st.button("Eliminar cuadro", key=f"del_{cid}"):
             eliminar_cuadro(cid)
