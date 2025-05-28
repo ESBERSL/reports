@@ -310,7 +310,6 @@ def pantalla_gestion_cuadros():
 
         with st.expander("Editar defectos"):
             seleccionados = []
-            detalles = {}
             for d in generales + tierras + emergencias:
                 chk = st.checkbox(
                     d,
@@ -322,7 +321,7 @@ def pantalla_gestion_cuadros():
                     seleccionados.append(d)
             if st.button("Guardar defectos", key=f"gd_{cid}"):
                 finales = [
-                    f"{d}_{detalles[d].strip()}" if detalles[d].strip() else d
+                    d
                     for d in seleccionados
                 ]
                 actualizar_defectos(cid, finales)
@@ -363,7 +362,7 @@ def pantalla_gestion_cuadros():
             a1 = st.number_input("Aislamiento (MΩ)", min_value=0.0, step=1.0, value=0.0, key="naisla")
         with st.expander("Añadir defectos"):
             defectos_nuevos = []
-            detalles_nuevos = {}
+
 
             st.markdown("### 🔧 Generales")
             for d in generales:
@@ -406,16 +405,11 @@ def pantalla_gestion_cuadros():
         if new_id is not None:
             defectos_finales = []
             for d in defectos_nuevos:
-                detalle = detalles_nuevos.get(d, "").strip()
-                if detalle:
-                    defectos_finales.append(f"{d}_{detalle}")
-                else:
                     defectos_finales.append(d)
             actualizar_defectos(new_id, defectos_finales)
             st.session_state["limpiar_form"] = True
             defectos_finales = []
             defectos_nuevos = []
-            detalles_nuevos = {}
             st.success("Cuadro y defectos añadidos.")
 
         for d in generales + tierras + emergencias:
