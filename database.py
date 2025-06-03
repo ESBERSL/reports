@@ -22,7 +22,9 @@ def obtener_cuadros(centro_id):
         orden_tipo = {"CGBT": 0, "CS": 1, "CT": 2, "CC": 3}
         # Añadimos columna auxiliar para orden
         df["orden_tipo"] = df["tipo"].map(orden_tipo).fillna(99)
+
         if st.session_state.get("usuario")  == "hector":
+            # Ordenamos por id
             df = df.sort_values(by=["id"]).reset_index(drop=True)
         else:    
             # Ordenamos por tipo y número

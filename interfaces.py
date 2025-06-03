@@ -17,7 +17,8 @@ from database import (
 from informes import (
     obtener_word_tierras,
     obtener_word_aislamientos,
-    generar_informe_word_bra
+    generar_informe_word_bra,
+    generar_informe_word_reparacion
 )
 
 # Conexión a la base de datos de Supabase
@@ -33,12 +34,12 @@ def pantalla_inicio():
         st.rerun()
 
     # Filtros
-    provincia = st.selectbox("Filtrar por provincia", ["Todas", "Alicante", "Valencia", "Castellón"], key="provincia")
+    provincia = st.selectbox("Filtrar por cliente", ["Todos", "Conselleria Alicante", "Conselleria Valencia", "Conselleria Castellón", "DIV"], key="provincia")
     busqueda = st.text_input("Buscar centro", key="busqueda")
 
     df = obtener_centros()
-    if provincia != "Todas":
-        df = df[df["provincia"] == provincia]
+    if provincia != "Todos":
+        df = df[df["cliente"] == provincia]
     if busqueda:
         df = df[df["nombre"].str.contains(busqueda, case=False, na=False)]
 
@@ -160,7 +161,7 @@ def pantalla_gestion():
     st.divider()
 
     # Botones de informes
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     with c1:
         if st.button("Informe Tierras"):
             try:
@@ -176,7 +177,9 @@ def pantalla_gestion():
     with c3:
         if st.button("Informe BRA"):
             generar_informe_word_bra(centro_id)
-
+    with c4:
+        if st.button("Informe para Reparación"):
+            generar_informe_word_reparacion(centro_id)
 def pantalla_gestion_cuadros():
     centro_id = st.session_state["centro_seleccionado"]
     usuario = st.session_state["usuario"]
@@ -417,9 +420,7 @@ def pantalla_gestion_cuadros():
                 st.session_state.pop(key, None)
             for d in generales + tierras + emergencias:
                 st.session_state.pop(f"new_d_{d}", None)
-                st.session_state.pop(f"new_dt_{d}", None)
-                st.session_state[f"new_d_{d}"] = False
-                st.session_state[f"new_dt_{d}"] = False   
+                st.session_state[f"new_d_{d}"] = False 
         st.session_state["nnom"]=""
         st.session_state["new_anotaciones"]=""
         st.session_state["ntierra"]=0.0

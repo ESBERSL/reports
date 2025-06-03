@@ -4,8 +4,11 @@ from io import BytesIO
 from supabase import create_client, Client
 import streamlit as st
 from datetime import datetime
-from database import  obtener_defectos, obtener_datos_cuadro
+from database import  obtener_defectos, obtener_datos_cuadro, obtener_cuadros
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Pt, RGBColor
+from docx.oxml.ns import qn
+from collections import defaultdict
 
 # Conexión a Supabase
 url = st.secrets["supabase"]["SUPABASE_URL"]
@@ -24,12 +27,6 @@ def obtener_datos_centro(centro_id):
 # Ruta de la plantilla de Word (asegúrate de que exista en tu proyecto)
 PLANTILLA_TIERRAS = "tierras_plantilla.docx"
 PLANTILLA_AISLAMIENTOS = "aislamientos_plantilla.docx"
-
-
-# Obtener los cuadros eléctricos de un centro
-def obtener_cuadros(centro_id):
-    response = supabase.table('cuadros').select('*').eq('centro_id', centro_id).execute()
-    return pd.DataFrame(response.data)
 
     
 # Función para modificar la plantilla de Word
@@ -363,6 +360,100 @@ def generar_informe_word_bra(centro_id):
     with open("tmp/informe_bra.docx", "rb") as docx_file:
         st.download_button("Descargar BRA", docx_file, file_name=f"{fname}.docx", mime="application/docx")        
     
+def generar_informe_word_reparacion(centro_id):
+    doc = Document()
+    datos_centro = obtener_datos_centro(centro_id)
+    nombre_centro = datos_centro.get("nombre", "Desconocido")
+
+    # Título: nombre del centro en negrita y grande
+    p = doc.add_paragraph()
+    run = p.add_run(nombre_centro)
+    run.bold = True
+    run.font.size = Pt(24)
+    run.font.color.rgb = RGBColor(0, 0, 0)
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    defectos = obtener_defectos(centro_id) or []
+    if not defectos:
+        doc.add_paragraph("No hay defectos registrados para este centro.")
+    else:
+        # Agrupar defectos por cuadro
+        cuadros = defaultdict(list)
+        for defecto in defectos:
+            cuadros[defecto["cuadro"]].append(defecto)
+
+        # Obtener detalles de la tabla cuadros
+        df_cuadros = obtener_cuadros(centro_id)
+        detalles_por_cuadro = {}
+        for _, row in df_cuadros.iterrows():
+            # Asociar detalles a cada defecto por su nombre_normalizado
+            defectos_str = row.get("defectos", "")
+            if defectos_str:
+                # Si es una lista, iterar directamente; si es string, dividir por ";"
+                if isinstance(defectos_str, list):
+                    items = defectos_str
+                else:
+                    items = defectos_str.split(";")
+                for item in items:
+                    if "_" in item:
+                        nombre_defecto, detalle = item.split("_", 1)
+                        detalles_por_cuadro[nombre_defecto.strip()] = detalle.strip()
+
+        for cuadro, defectos_cuadro in cuadros.items():
+            
+            # Cuadro resaltado: solo negrita y tamaño ligeramente mayor
+            cuadro_p = doc.add_paragraph()
+
+
+            # Buscar el tipo y número del cuadro actual en df_cuadros
+            tipo = None
+            numero = None
+            if not df_cuadros.empty:
+                fila_cuadro = df_cuadros[df_cuadros["nombre"] == cuadro]
+                if not fila_cuadro.empty:
+                    tipo = fila_cuadro.iloc[0].get("tipo", "")
+                    numero = fila_cuadro.iloc[0].get("numero", None)
+            if tipo == 'CGBT':
+                cuadro_run = cuadro_p.add_run(str(cuadro))
+            elif numero is not None and numero <= 9:
+                cuadro_run = cuadro_p.add_run(f"{tipo}-0{numero} {cuadro}")
+            else:
+                cuadro_run = cuadro_p.add_run(f"{tipo}-{numero} {cuadro}")
+            cuadro_run.bold = True
+            cuadro_run.font.size = Pt(16)
+            cuadro_p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+            # Detalle del cuadro desde la tabla cuadros
+            detalle_cuadro = detalles_por_cuadro.get(cuadro, "")
+            if detalle_cuadro:
+                doc.add_paragraph(f"Detalle: {detalle_cuadro}")
+
+            # Listar defectos (sin ITC)
+            for defecto in defectos_cuadro:
+                nombre_normalizado = defecto.get("nombre_normalizado", "")
+                doc.add_paragraph(
+                    f"{nombre_normalizado}\n",
+                    style="List Bullet"
+                )
+
+            # Buscar anotaciones del cuadro en df_cuadros
+            anotaciones = ""
+            if not df_cuadros.empty:
+                fila_cuadro = df_cuadros[df_cuadros["nombre"] == cuadro]
+                if not fila_cuadro.empty:
+                    anotaciones = fila_cuadro.iloc[0].get("anotaciones", "")
+            if anotaciones:
+                doc.add_paragraph(f"Anotaciones:\n{anotaciones}")
+
+    # Guardar el documento en un buffer y mostrar el botón de descarga
+    from io import BytesIO
+    from datetime import datetime
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    fecha_actual = datetime.now()
+    fname = f"{fecha_actual.strftime('%Y-%m-%d')}_{nombre_centro.split('_')[0]}_Reparacion.docx"
+    st.download_button("Descargar Informe de Reparación", buffer, file_name=fname, mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 # Función para obtener el archivo Word generado
 def obtener_word_tierras(centro_id):
     df_cuadros = obtener_cuadros(centro_id)
