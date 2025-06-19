@@ -44,12 +44,14 @@ def obtener_defectos(centro_id):
         defectos_str = cuadro.get("defectos")
         
         if isinstance(defectos_str, list):
-             defectos_nombres = [d.strip() for d in defectos_str if isinstance(d, str) and d.strip()]
+            defectos_nombres = [d.strip() for d in defectos_str if isinstance(d, str) and d.strip()]
         else:
-             defectos_nombres = [d.strip() for d in str(defectos_str).split(",") if d.strip()]
+            defectos_nombres = [d.strip() for d in str(defectos_str).split(",") if d.strip()]
 
         for nombre in defectos_nombres:
-            nombre_base = nombre.split("_")[0] 
+            partes = nombre.split("_", 1)
+            nombre_base = partes[0]
+            detalles = partes[1] if len(partes) > 1 else ""
             respuesta = supabase.table("defectos").select("nombre_defecto_normalizado, itc").eq("defecto_original", nombre_base).execute()
             if respuesta.data:
                 defecto = respuesta.data[0]
@@ -57,7 +59,8 @@ def obtener_defectos(centro_id):
                     "cuadro": nombre_cuadro,
                     "nombre_normalizado": defecto["nombre_defecto_normalizado"],
                     "itc": defecto["itc"],
-                    "cuadro_id": cuadro_id
+                    "cuadro_id": cuadro_id,
+                    "detalles": detalles
                 })
             else:
                 print(f"[AVISO] Defecto no encontrado en diccionario: '{nombre_base}' (cuadro: {nombre_cuadro})")
