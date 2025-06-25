@@ -34,12 +34,14 @@ def generar_informe_word_tierras(centro_id):
     # Cargar la plantilla de Word
     doc = Document(PLANTILLA_TIERRAS)
     datos_centro = obtener_datos_centro(centro_id)
-    nombre_centro = datos_centro["nombre"]
-    direccion_centro = datos_centro["direccion"]
-    cp_centro = str(int(float(datos_centro["cp"])))
-    provincia_centro = datos_centro["provincia"]
-    pueblo_centro = datos_centro["pueblo"]
+    nombre_centro = datos_centro.get("nombre") or "Desconocido"
+    direccion_centro = datos_centro.get("direccion") or "Desconocido"
+    cp_centro = str(int(float(datos_centro.get("cp")))) if datos_centro.get("cp") else "00000"
+    provincia_centro = datos_centro.get("provincia") or "Desconocido"
+    pueblo_centro = datos_centro.get("pueblo") or "Desconocido"
     fecha_actual = datetime.now()
+
+
 
     df_cuadros = obtener_cuadros(centro_id)
     medidas_tierra = df_cuadros["tierra_ohmnios"].tolist()
@@ -121,8 +123,8 @@ def generar_informe_word_tierras(centro_id):
       #pypandoc.convert_file("/tmp/informe.docx", to='pdf', outputfile=output_pdf)
     
     
-    direccion_centro = datos_centro["direccion"]
-    cp_centro = str(int(float(datos_centro["cp"])))
+    direccion_centro = datos_centro["direccion"] 
+    cp_centro = str(int(float(datos_centro["cp"]))) if datos_centro.get("cp") else "00000"
     provincia_centro = datos_centro["provincia"]
     fname = f"{fecha_actual.strftime('%Y-%m-%d')}_{datos_centro['nombre'].split('_')[0]}_InfTierras"
     with open("/tmp/informe.docx", "rb") as pdf_file:
@@ -132,11 +134,11 @@ def generar_informe_word_aislamientos(centro_id):
     # Cargar la plantilla de Word
     doc = Document(PLANTILLA_AISLAMIENTOS)
     datos_centro = obtener_datos_centro(centro_id)
-    nombre_centro = datos_centro["nombre"]
-    direccion_centro = datos_centro["direccion"]
-    cp_centro = str(int(float(datos_centro["cp"])))
-    provincia_centro = datos_centro["provincia"]
-    pueblo_centro = datos_centro["pueblo"]
+    nombre_centro = datos_centro.get("nombre") or "Desconocido"
+    direccion_centro = datos_centro.get("direccion") or "Desconocido"
+    cp_centro = str(int(float(datos_centro.get("cp")))) if datos_centro.get("cp") else "00000"
+    provincia_centro = datos_centro.get("provincia") or "Desconocido"
+    pueblo_centro = datos_centro.get("pueblo") or "Desconocido"
     fecha_actual = datetime.now()
 
     df_cuadros = obtener_cuadros(centro_id)
@@ -221,7 +223,7 @@ def generar_informe_word_aislamientos(centro_id):
     
     
     direccion_centro = datos_centro["direccion"]
-    cp_centro = str(int(float(datos_centro["cp"])))
+    cp_centro = str(int(float(datos_centro["cp"]))) if datos_centro.get("cp") else "00000"
     provincia_centro = datos_centro["provincia"]
     fname = f"{fecha_actual.strftime('%Y-%m-%d')}_{datos_centro['nombre'].split('_')[0]}_InfAislamientos"
     with open("/tmp/informe.docx", "rb") as pdf_file:
