@@ -12,7 +12,7 @@ key = st.secrets["supabase"]["SUPABASE_KEY"]
 supabase: Client = create_client(url, key)
 
 # Leer datos desde un archivo Excel
-excel_file = "datos nous espais.xlsx"
+excel_file = "datos_centros.xlsx"
 if excel_file is not None:
     df = pd.read_excel(excel_file)
 
@@ -20,14 +20,16 @@ if excel_file is not None:
     df = df.rename(columns={
         "nombre": "nombre",
         "direccion": "direccion",
-        "poblacion": "pueblo",
+        "pueblo": "pueblo",
         "cp": "cp",
         "telefono": "telf",
-        "cliente": "cliente"
+        "cliente": "cliente",
+        "email": "email",
+        "nif": "nif"
     })
 
     # Seleccionar solo las columnas necesarias
-    campos_db = ["nombre", "direccion", "pueblo", "cp", "telf", "cliente"]
+    campos_db = ["nombre", "direccion", "pueblo", "cp", "telf", "cliente", "email", "nif"]
     df = df[campos_db]
 
     # Insertar cada fila en la tabla 'centros'

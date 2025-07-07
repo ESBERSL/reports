@@ -34,14 +34,17 @@ def pantalla_inicio():
         st.rerun()
 
     # Filtros
-    provincia = st.selectbox("Filtrar por cliente", ["Todos", "Conselleria Alicante", "Conselleria Valencia", "Conselleria Castellón", "DIV", "Nous Espais"], key="provincia")
+    provincia = st.selectbox("Filtrar por cliente", ["Todos", "Conselleria Alicante", "Conselleria Valencia", "Conselleria Castellón", "DIV", "Nous Espais", "Ayto Catarroja", "Ayto Torrent", "Ayto Aldaia"], key="provincia")
     busqueda = st.text_input("Buscar centro", key="busqueda")
+    
 
     df = obtener_centros()
+    df = df.sort_values(by="nombre")
     if provincia != "Todos":
         df = df[df["cliente"] == provincia]
     if busqueda:
         df = df[df["nombre"].str.contains(busqueda, case=False, na=False)]
+        
 
     for _, row in df.iterrows():
         if st.button(f"Seleccionar {row['nombre']}", use_container_width=True):
