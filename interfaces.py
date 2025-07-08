@@ -28,6 +28,28 @@ supabase: Client = create_client(url, key)
 
 
 def pantalla_inicio():
+    st.markdown("<h1 style='text-align: center;'>Seleccione una opción</h1>", unsafe_allow_html=True)
+    col = st.columns(3)[1]  # Selecciona la columna central de 3
+    with col:
+        if st.button("Cerrar sesión",  use_container_width=True):
+            cerrar_sesion()
+            st.rerun()
+        if st.button("Edificios Baja Tensión", use_container_width=True):
+            st.session_state["pagina"] = "baja"
+            guardar_estado_sesion(st.session_state["usuario"], "baja", None, None)
+            st.rerun()
+        if st.button("Baja Tensión Genérica", use_container_width=True):
+            st.session_state["pagina"] = "baja_generica"
+            guardar_estado_sesion(st.session_state["usuario"], "baja_generica", None, None)
+            st.rerun()    
+        if st.button("Edificios Bateria de Condensadores", use_container_width=True):
+            st.session_state["pagina"] = "bateria_edificios"
+            st.rerun()
+        if st.button("Bateria de Condensadores Genérica", use_container_width=True):
+            st.session_state["pagina"] = "bateria_generica"
+            st.rerun()
+
+def pantalla_baja():
     st.title("Lista de Centros")
     if st.button("Cerrar sesión"):
         cerrar_sesion()
@@ -99,9 +121,14 @@ def pantalla_gestion():
     col1, col2 = st.columns(2)
     with col1:
         if st.button("← Volver a Listado de Centros"):
+            st.session_state["pagina"] = "baja"
+            guardar_estado_sesion(usuario, "baja", None, None)
+            st.rerun()
+    with col2:
+        if st.button("← Volver a Inicio"):
             st.session_state["pagina"] = "inicio"
             guardar_estado_sesion(usuario, "inicio", None, None)
-            st.rerun()
+            st.rerun()        
 
     # Datos editables
     st.subheader("Datos del Centro")
@@ -204,17 +231,22 @@ def pantalla_gestion_cuadros():
         cerrar_sesion()
         st.rerun()
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     with col1:
         if st.button("← Volver a Listado de Centros"):
-            st.session_state["pagina"] = "inicio"
-            guardar_estado_sesion(usuario, "inicio", None, None)
+            st.session_state["pagina"] = "baja"
+            guardar_estado_sesion(usuario, "baja", None, None)
             st.rerun()
     with col2:
         if st.button("← Volver a Gestión de Centro"):
             st.session_state["pagina"] = "gestion"
             guardar_estado_sesion(usuario, "gestion", centro_id, None)
             st.rerun()
+    with col3:
+        if st.button("← Volver a Inicio"):
+            st.session_state["pagina"] = "inicio"
+            guardar_estado_sesion(usuario, "inicio", None, None)
+            st.rerun()        
 
     st.title(f"Gestión de Cuadros — {st.session_state['nombre_centro']}")
 

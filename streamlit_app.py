@@ -21,7 +21,7 @@ if __name__ == "__main__":
 from supabase import create_client, Client
 from datetime import datetime,timezone
 from streamlit_cookies_manager import EncryptedCookieManager
-from interfaces import pantalla_inicio, pantalla_gestion, pantalla_gestion_cuadros
+from interfaces import pantalla_inicio, pantalla_gestion, pantalla_gestion_cuadros, pantalla_baja
 from zoneinfo import ZoneInfo
 from auth import  verificar_login, guardar_estado_sesion
 
@@ -109,6 +109,8 @@ if not st.session_state['autenticado']:
     pantalla_login()
 elif st.session_state["pagina"] == "inicio":
     pantalla_inicio()
+elif st.session_state["pagina"] == "baja":
+    pantalla_baja()    
 elif st.session_state["pagina"] == "gestion":
     pantalla_gestion()
 elif st.session_state["pagina"] == "gestion_cuadros":
