@@ -597,6 +597,11 @@ def generar_presupuesto(centro_id):
         "Articulo": "BT014",
         "Denominación": "Suministro y montaje de obturadores.",
         "Cantidad": 1
+    },
+    "PUERTAS/CHASIS": {
+        "Articulo": "BT009",
+        "Denominación": "Trabajos de puesta a tierra directa del cuadro electrico.",
+        "Cantidad": 1
     }
     }
 
