@@ -3,6 +3,8 @@ from supabase import create_client, Client
 from zoneinfo import ZoneInfo
 from datetime import datetime
 import pandas as pd
+import numpy as np
+import math
 
 from auth import guardar_estado_sesion, cerrar_sesion
 from database import (
@@ -18,7 +20,9 @@ from informes import (
     obtener_word_tierras,
     obtener_word_aislamientos,
     generar_informe_word_bra,
-    generar_informe_word_reparacion
+    generar_informe_word_reparacion,
+    generar_informe_bateria,
+    generar_presupuesto
 )
 
 # Conexión a la base de datos de Supabase
@@ -43,7 +47,8 @@ def pantalla_inicio():
             guardar_estado_sesion(st.session_state["usuario"], "baja_generica", None, None)
             st.rerun()    
         if st.button("Edificios Bateria de Condensadores", use_container_width=True):
-            st.session_state["pagina"] = "bateria_edificios"
+            st.session_state["pagina"] = "bateria"
+            guardar_estado_sesion(st.session_state["usuario"], "bateria", None, None)
             st.rerun()
         if st.button("Bateria de Condensadores Genérica", use_container_width=True):
             st.session_state["pagina"] = "bateria_generica"
@@ -54,6 +59,10 @@ def pantalla_baja():
     if st.button("Cerrar sesión"):
         cerrar_sesion()
         st.rerun()
+    if st.button("← Volver a Inicio"):
+        st.session_state["pagina"] = "inicio"
+        guardar_estado_sesion(st.session_state["usuario"], "inicio", None, None)
+        st.rerun()    
 
     # Filtros
     provincia = st.selectbox("Filtrar por cliente", ["Todos", "Conselleria Alicante", "Conselleria Valencia", "Conselleria Castellón", "DIV", "Nous Espais", "Ayto Catarroja", "Ayto Torrent", "Ayto Aldaia"], key="provincia")
@@ -61,6 +70,7 @@ def pantalla_baja():
     
 
     df = obtener_centros()
+    df = df[df["tipo"] == "baja"]
     df = df.sort_values(by="nombre")
     if provincia != "Todos":
         df = df[df["cliente"] == provincia]
@@ -77,7 +87,36 @@ def pantalla_baja():
             })
             guardar_estado_sesion(st.session_state["usuario"], "gestion", row["id"], None)
             st.rerun()
+def pantalla_bateria():
+    st.title("Lista de Baterías de Condensadores")
+    if st.button("Cerrar sesión"):
+        cerrar_sesion()
+        st.rerun()
+    if st.button("← Volver a Inicio"):
+            st.session_state["pagina"] = "inicio"
+            guardar_estado_sesion(st.session_state["usuario"], "inicio", None, None)
+            st.rerun()    
 
+    # Filtros
+    provincia = st.selectbox("Filtrar por cliente", ["Todos", "Conselleria Alicante", "Conselleria Valencia", "Conselleria Castellón", "DIV", "Nous Espais", "Ayto Catarroja", "Ayto Torrent", "Ayto Aldaia"], key="provincia")
+    busqueda = st.text_input("Buscar batería", key="busqueda")
+
+    df = obtener_centros("centros_bateria")
+    #df = df.sort_values(by="nombre")
+    if provincia != "Todos":
+        df = df[df["cliente"] == provincia]
+    if busqueda:
+        df = df[df["nombre"].str.contains(busqueda, case=False, na=False)]
+
+    for _, row in df.iterrows():
+        if st.button(f"Seleccionar {row['nombre']}", use_container_width=True):
+            st.session_state.update({
+                "centro_seleccionado": row["id"],
+                "nombre_centro": row["nombre"],
+                "pagina": "gestion_bateria"
+            })
+            guardar_estado_sesion(st.session_state["usuario"], "gestion_bateria", row["id"], None)
+            st.rerun()
 
 def pantalla_gestion():
     
@@ -191,7 +230,7 @@ def pantalla_gestion():
     st.divider()
 
     # Botones de informes
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         if st.button("Informe Tierras"):
             try:
@@ -210,6 +249,159 @@ def pantalla_gestion():
     with c4:
         if st.button("Informe para Reparación"):
             generar_informe_word_reparacion(centro_id)
+    with c5:
+        if st.button("Presupuesto"):
+            generar_presupuesto(centro_id)
+                    
+def pantalla_gestion_bateria():
+    st.title(f"Gestión de Batería de Condensadores — {st.session_state['nombre_centro']}")
+    centro_id = st.session_state["centro_seleccionado"]
+    usuario = st.session_state["usuario"]
+
+    # ——— Navegación ———
+    if st.button("Cerrar sesión"):
+        cerrar_sesion()
+        st.rerun()
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("← Volver a Listado de Centros"):
+            st.session_state["pagina"] = "bateria"
+            guardar_estado_sesion(usuario, "bateria", None, None)
+            st.rerun()
+    with col2:
+        if st.button("← Volver a Inicio"):
+            st.session_state["pagina"] = "inicio"
+            guardar_estado_sesion(usuario, "inicio", None, None)
+            st.rerun()        
+
+    st.header("Datos del equipo analizado")
+
+    def cargar_datos(id_centro):
+        res = supabase.table("centros_bateria").select("*").eq("id", id_centro).execute()
+        if res.data:
+            return res.data[0]
+        return {}
+        
+    def limpiar_columna(columna):
+        return [
+            None if (pd.isna(x) or x == "" or (isinstance(x, float) and not math.isfinite(x))) else float(x)
+            for x in pd.to_numeric(columna, errors="coerce")
+        ]
+    
+    datos = cargar_datos(centro_id) if centro_id else {}
+
+    # Formulario con valores cargados (si existen)
+    marca_regulador = st.text_input("Marca del regulador", value=datos.get("marca_regulador", ""))
+    tipo_regulador = st.text_input("Tipo de regulador", value=datos.get("tipo_regulador", ""))
+    marca_condensadores = st.text_input("Marca de los condensadores", value=datos.get("marca_condensadores", ""))
+    modelo_condensadores = st.text_input("Modelo de los condensadores", value=datos.get("modelo_condensadores", ""))
+    tension_servicio = st.text_input("Tensión de servicio de los condensadores", value=datos.get("tension_servicio", ""))
+    potencia_condensadores = st.text_input("Potencia de los condensadores", value=datos.get("potencia_condensadores", ""))
+    potencia_total = st.text_input("Potencia total del equipo de compensación (Q total)", value=datos.get("potencia_total", ""))
+    seccion_linea = st.text_input("Sección de línea de alimentación a equipos de compensación", value=datos.get("seccion_linea", ""))
+    estado_visual = st.text_input("Estado visual del equipo", value=datos.get("estado_visual", ""))
+    referencia_equipo = st.text_input("Referencia del equipo", value=datos.get("referencia_equipo", ""))
+
+    # Crear DataFrame desde datos cargados o vacío
+    columns = [
+        "POTENCIA NOMINAL (kVAr)", "INTENSIDAD NOMINAL (A)",
+        "CONSUMO R (A)", "CONSUMO S (A)", "CONSUMO T (A)",
+        "RENDIMIENTO R (%)", "RENDIMIENTO S (%)", "RENDIMIENTO T (%)"
+    ]
+
+    def cargar_dataframe(datos, num_escalones):
+        if not datos or not datos.get("potencia_nominal"):
+            return pd.DataFrame([[""] * len(columns) for _ in range(num_escalones)], columns=columns)
+        return pd.DataFrame({
+            "POTENCIA NOMINAL (kVAr)": datos.get("potencia_nominal", []),
+            "INTENSIDAD NOMINAL (A)": datos.get("intensidad_nominal", []),
+            "CONSUMO R (A)": datos.get("consumo_r", []),
+            "CONSUMO S (A)": datos.get("consumo_s", []),
+            "CONSUMO T (A)": datos.get("consumo_t", []),
+            "RENDIMIENTO R (%)": datos.get("rendimiento_r", []),
+            "RENDIMIENTO S (%)": datos.get("rendimiento_s", []),
+            "RENDIMIENTO T (%)": datos.get("rendimiento_t", [])
+        })
+
+    def ajustar_filas_df(df_actual, num_filas_objetivo):
+        df_nuevo = pd.DataFrame(columns=columns)
+        filas_existentes = min(len(df_actual), num_filas_objetivo)
+        if filas_existentes > 0:
+            df_nuevo = pd.concat([df_nuevo, df_actual.iloc[:filas_existentes]], ignore_index=True)
+        filas_faltantes = num_filas_objetivo - len(df_nuevo)
+        if filas_faltantes > 0:
+            df_vacias = pd.DataFrame([[None] * len(columns)] * filas_faltantes, columns=columns)
+            df_nuevo = pd.concat([df_nuevo, df_vacias], ignore_index=True)
+        df_nuevo.index = [f"ESCALÓN {i+1}" for i in range(num_filas_objetivo)]
+        return df_nuevo
+
+    # Inicializar variables de sesión si no están
+    if "num_escalones_actual" not in st.session_state:
+        st.session_state.num_escalones_actual = datos.get("num_escalones", 1)
+
+    if "df_editor" not in st.session_state:
+        st.session_state.df_editor = cargar_dataframe(datos, st.session_state.num_escalones_actual)
+
+    # Selector y botón en horizontal
+    nuevo_num_escalones = st.number_input(
+        "Número de escalones",
+        min_value=1, max_value=10, step=1,
+        value=st.session_state.num_escalones_actual
+    )
+
+    if st.button("↻ Actualizar número de escalones"):
+        st.session_state.num_escalones_actual = nuevo_num_escalones
+        st.session_state.df_editor = ajustar_filas_df(st.session_state.df_editor, nuevo_num_escalones)
+
+    # Editor de tabla
+    edited_df = st.data_editor(
+        st.session_state.df_editor,
+        num_rows="fixed",
+        key=f"editor_{centro_id}"
+    )
+
+    comentario = st.text_area(
+        "Comentario General - Deficiencias/Observaciones",
+        value=datos.get("comentario", ""),
+        key="comentario_bateria"
+    )
+    # Botón de guardado
+    if st.button("💾 Guardar cambios"):
+        def limpiar_columna(columna):
+            import math
+            return [
+                None if (pd.isna(x) or x == "" or (isinstance(x, float) and not math.isfinite(x))) else float(x)
+                for x in pd.to_numeric(columna, errors="coerce")
+            ]
+
+        if centro_id:
+            supabase.table("centros_bateria").upsert({
+                "id": centro_id,
+                "marca_regulador": marca_regulador,
+                "tipo_regulador": tipo_regulador,
+                "marca_condensadores": marca_condensadores,
+                "modelo_condensadores": modelo_condensadores,
+                "tension_servicio": tension_servicio,
+                "potencia_condensadores": potencia_condensadores,
+                "num_escalones": st.session_state.num_escalones_actual,
+                "potencia_total": potencia_total,
+                "seccion_linea": seccion_linea,
+                "estado_visual": estado_visual,
+                "referencia_equipo": referencia_equipo,
+                "potencia_nominal": limpiar_columna(edited_df["POTENCIA NOMINAL (kVAr)"]),
+                "intensidad_nominal": limpiar_columna(edited_df["INTENSIDAD NOMINAL (A)"]),
+                "consumo_r": limpiar_columna(edited_df["CONSUMO R (A)"]),
+                "consumo_s": limpiar_columna(edited_df["CONSUMO S (A)"]),
+                "consumo_t": limpiar_columna(edited_df["CONSUMO T (A)"]),
+                "rendimiento_r": limpiar_columna(edited_df["RENDIMIENTO R (%)"]),
+                "rendimiento_s": limpiar_columna(edited_df["RENDIMIENTO S (%)"]),
+                "rendimiento_t": limpiar_columna(edited_df["RENDIMIENTO T (%)"]),
+                "comentario": comentario,
+            }).execute()
+            st.success("✅ Cambios guardados correctamente.")
+    if st.button("Informe Bateria Condensadores"):
+            generar_informe_bateria(centro_id, edited_df)    
 def pantalla_gestion_cuadros():
     centro_id = st.session_state["centro_seleccionado"]
     usuario = st.session_state["usuario"]

@@ -9,8 +9,8 @@ key = st.secrets["supabase"]["SUPABASE_KEY"]
 supabase: Client = create_client(url, key)
 
 # Función para obtener la lista de centros
-def obtener_centros():
-    response = supabase.table('centros').select('*').execute()
+def obtener_centros(tabla='centros'):
+    response = supabase.table(tabla).select('*').execute()
     return pd.DataFrame(response.data)
 
 # Función para obtener los cuadros eléctricos de un centro

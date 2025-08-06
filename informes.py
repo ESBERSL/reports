@@ -9,6 +9,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt, RGBColor
 from docx.oxml.ns import qn
 from collections import defaultdict
+import re
 
 # Conexión a Supabase
 url = st.secrets["supabase"]["SUPABASE_URL"]
@@ -16,8 +17,8 @@ key = st.secrets["supabase"]["SUPABASE_KEY"]
 supabase: Client = create_client(url, key)
 
 
-def obtener_datos_centro(centro_id):
-    response = supabase.table('centros').select('*').eq('id', centro_id).execute()
+def obtener_datos_centro(centro_id, tabla='centros'):
+    response = supabase.table(tabla).select('*').eq('id', centro_id).execute()
     
     if response.data:
         return response.data[0]  # Retorna el primer resultado
@@ -443,3 +444,195 @@ def obtener_word_aislamientos(centro_id):
     if df_cuadros.empty:
         raise ValueError(f"No hay cuadros creados en el centro para generar el informe de aislamientos.")
     return generar_informe_word_aislamientos(centro_id)
+
+
+def generar_informe_bateria(centro_id, df_escalones):
+
+    meses = {
+    "January": "enero", "February": "febrero", "March": "marzo", "April": "abril",
+    "May": "mayo", "June": "junio", "July": "julio", "August": "agosto",
+    "September": "septiembre", "October": "octubre", "November": "noviembre", "December": "diciembre"
+    }
+
+    plantilla = "plantilla_bateria.docx" 
+    doc = Document(plantilla)
+    
+    datos_centro = obtener_datos_centro(centro_id, "centros_bateria")
+    fecha_actual = datetime.now()
+    nombre_centro = datos_centro.get("nombre", "Desconocido")
+    direccion_centro = datos_centro.get("direccion", "Desconocida")
+    cp_centro = str(int(float(datos_centro.get("cp", 0)))) if datos_centro.get("cp") else "00000"
+    provincia_centro = datos_centro.get("provincia", "Desconocida")
+    pueblo_centro = datos_centro.get("pueblo", "Desconocido")
+    marcar = datos_centro.get("marca_regulador", "Desconocido")
+    tipor = datos_centro.get("tipo_regulador", "Desconocido")
+    marcac = datos_centro.get("marca_condensadores", "Desconocido")
+    modeloc = datos_centro.get("modelo_condensadores", "Desconocido")
+    tension = datos_centro.get("tension_servicio", "Desconocido")
+    potenciac = datos_centro.get("potencia_condensadores", "Desconocido")
+    escalones = str(datos_centro.get("num_escalones", "Desconocido"))
+    potenciat = datos_centro.get("potencia_total", "Desconocido")
+    seccionl= datos_centro.get("seccion_linea", "Desconocido")
+    estadov = datos_centro.get("estado_visual", "Desconocido")
+    referencia = datos_centro.get("referencia_equipo", "Desconocido")
+    comentario = datos_centro.get("comentario", "No hay comentarios")
+    dia = fecha_actual.day
+    mes = meses[fecha_actual.strftime("%B")] 
+    año = fecha_actual.year
+
+    reemplazos = {
+        "[NOMBRE_EDIFICIO]": nombre_centro,
+        "[DOMICILIO]": direccion_centro,
+        "[CP]": cp_centro,
+        "[PROVINCIA]": provincia_centro,
+        "[MUNICIPIO]": pueblo_centro,
+        "[MARCAR]": marcar,
+        "[TIPOR]": tipor,
+        "[MARCAC]": marcac,
+        "[MODELOC]": modeloc,
+        "[TENSION]": tension,
+        "[POTENCIA]": potenciac,    
+        "[ESCALONES]": escalones,
+        "[QTOT]": potenciat,
+        "[SECC]": seccionl, 
+        "[VISUAL]": estadov,
+        "[REF]": referencia,
+        "[DIA]": str(dia),
+        "[MES]": mes,
+        "[AÑO]": str(año),
+        "[COMENTARIO]": comentario
+
+    }
+
+    # Reemplazo en texto
+    for paragraph in doc.paragraphs:
+        for placeholder, valor in reemplazos.items():
+            for run in paragraph.runs:
+                if placeholder in run.text:
+                    run.text = run.text.replace(placeholder, valor)
+
+    # Reemplazo en tablas
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for para in cell.paragraphs:
+                    for run in para.runs:
+                        for placeholder, valor in reemplazos.items():
+                            if placeholder in run.text:
+                                if valor is not None:
+                                    run.text = run.text.replace(placeholder, valor)
+
+    # Reemplazo en encabezado
+    for section in doc.sections:
+        for header in section.header.paragraphs:
+            for run in header.runs:
+                for placeholder, valor in reemplazos.items():
+                    if placeholder in run.text:
+                        if valor is not None:
+                         run.text = run.text.replace(placeholder, valor)
+
+    tabla = None
+    for tbl in doc.tables:
+        if "POTENCIA NOMINAL" in tbl.cell(0, 1).text:
+            tabla = tbl
+            break
+
+    if tabla is None:
+        raise ValueError("❌ No se encontró la tabla de mediciones en el documento.")
+
+    # Recorremos los escalones y rellenamos las filas (comienza en fila 1, fila 0 es cabecera)
+    for i in range(min(len(df_escalones), len(tabla.rows) - 1)):
+        fila = tabla.rows[i + 2]
+        fila.cells[1].text = str(df_escalones.iloc[i]["POTENCIA NOMINAL (kVAr)"])
+        fila.cells[2].text = str(df_escalones.iloc[i]["INTENSIDAD NOMINAL (A)"])
+        fila.cells[3].text = str(df_escalones.iloc[i]["CONSUMO R (A)"])
+        fila.cells[4].text = str(df_escalones.iloc[i]["CONSUMO S (A)"])
+        fila.cells[5].text = str(df_escalones.iloc[i]["CONSUMO T (A)"])
+        fila.cells[6].text = str(df_escalones.iloc[i]["RENDIMIENTO R (%)"])
+        fila.cells[7].text = str(df_escalones.iloc[i]["RENDIMIENTO S (%)"])
+        fila.cells[8].text = str(df_escalones.iloc[i]["RENDIMIENTO T (%)"])
+
+
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    file_path = "tmp/informe_batcond.docx"
+    doc.save(file_path)
+
+    filename = f"{fecha_actual.strftime('%Y-%m-%d')}_{nombre_centro}_BatCond"
+    filename = re.sub(r"[\r\n]", "", filename)  # elimina saltos de línea
+    filename = filename.replace("/", "-")  # opcional: evita errores por nombres con slashes
+    with open("tmp/informe_batcond.docx", "rb") as docx_file:
+        st.download_button("Descargar Informe", docx_file, file_name=f"{filename}.docx", mime="application/docx")
+
+def generar_presupuesto(centro_id):
+
+    defectos_presupuestables = {
+    "PEGATINA": {
+        "Articulo": "BT001",
+        "Unidad": " ",
+        "Denominación": "Suministro y colocación de placa de señalización de riesgo eléctrico en el cuadro",
+        "Cantidad": 1
+    },
+    "PUNTERAS": {
+        "Articulo": "BT012",
+        "Unidad": " ",
+        "Denominación": "Trabajos de desconexión del cableado que se encuentra sin punteras y/o mal conexionado y realizar el correcto conexionado con punteras.",
+        "Cantidad": 1
+    }
+    }
+
+    df = obtener_cuadros(centro_id)
+    columnas = [
+        "Partida", "SubPartida", "Articulo", "Denominación", "Unidad", "Cantidad"
+    ]
+
+    filas = []
+    filas.append({
+        "Partida": "Instalación Eléctrica",
+        "Unidad": "",
+        "Denominación": "Instalación Eléctrica"
+    })
+
+    for idx, (_, row) in enumerate(df.iterrows(), start=1):
+        filas.append({
+            "SubPartida": f"1. {idx}.",
+            "Unidad": "",
+            "Denominación": row["nombre"],
+            "Cantidad"  : 1
+        })
+        defectos_celda = row.get("defectos", "")
+
+# Convertimos a lista de defectos estandarizada
+        if isinstance(defectos_celda, list) or isinstance(defectos_celda, tuple):
+            lista_defectos = [d.strip().upper() for d in defectos_celda]
+        elif isinstance(defectos_celda, str) and defectos_celda.strip() != "":
+            lista_defectos = [d.strip().upper() for d in defectos_celda.split(",")]
+        else:
+            lista_defectos = []
+        print(f"Lista de defectos: {lista_defectos}")
+        # Recorremos los defectos encontrados
+        for defecto in lista_defectos:
+            if defecto in defectos_presupuestables:
+                info = defectos_presupuestables[defecto]
+                filas.append({
+                    "Articulo": info["Articulo"],
+                    "Unidad": "",
+                    "Denominación": info["Denominación"],
+                    "Cantidad": info["Cantidad"]
+                })
+
+    df_out = pd.DataFrame(filas, columns=columnas)
+    df_out.to_excel("presupuesto.xlsx", index=False)   
+
+    with open("presupuesto.xlsx", "rb") as f:
+        bytes_data = f.read()
+    
+    st.download_button(
+        label="Descargar Excel",
+        data=bytes_data,
+        file_name="presupuesto.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
+# Función para obtener el archivo Word generado
