@@ -570,34 +570,50 @@ def generar_presupuesto(centro_id):
     defectos_presupuestables = {
     "PEGATINA": {
         "Articulo": "BT001",
-        "Unidad": " ",
         "Denominación": "Suministro y colocación de placa de señalización de riesgo eléctrico en el cuadro",
         "Cantidad": 1
     },
     "PUNTERAS": {
         "Articulo": "BT012",
-        "Unidad": " ",
         "Denominación": "Trabajos de desconexión del cableado que se encuentra sin punteras y/o mal conexionado y realizar el correcto conexionado con punteras.",
+        "Cantidad": 1
+    },
+    "CIR SIN IDENTIFICAR": {
+        "Articulo": "BT004",
+        "Denominación": "Trabajos de identificación y marcado de los circuitos del cuadro que se encuentren sin identificar.",
+        "Cantidad": 1
+    },
+    "IDENTIF. COLORES": {
+        "Articulo": "BT003",
+        "Denominación": "Trabajos de identificación de los conductores mediante colores que se encuentran sin identificar.",
+        "Cantidad": 1
+    },
+    "POLARIDAD INVERTIDA": {
+        "Articulo": "BT002",
+        "Denominación": "Trabajos de desconexión del circuito conectado aguas arriba y conexión.",
+        "Cantidad": 1
+    },
+    "OBTURADORES": {
+        "Articulo": "BT002",
+        "Denominación": "Suministro y montaje de obturadores.",
         "Cantidad": 1
     }
     }
 
     df = obtener_cuadros(centro_id)
     columnas = [
-        "Partida", "SubPartida", "Articulo", "Denominación", "Unidad", "Cantidad"
+        "Partida", "SubPartida", "Articulo", "Denominación","Cantidad"
     ]
 
     filas = []
     filas.append({
         "Partida": "Instalación Eléctrica",
-        "Unidad": "",
         "Denominación": "Instalación Eléctrica"
     })
 
     for idx, (_, row) in enumerate(df.iterrows(), start=1):
         filas.append({
             "SubPartida": f"1. {idx}.",
-            "Unidad": "",
             "Denominación": row["nombre"],
             "Cantidad"  : 1
         })
@@ -617,7 +633,6 @@ def generar_presupuesto(centro_id):
                 info = defectos_presupuestables[defecto]
                 filas.append({
                     "Articulo": info["Articulo"],
-                    "Unidad": "",
                     "Denominación": info["Denominación"],
                     "Cantidad": info["Cantidad"]
                 })
