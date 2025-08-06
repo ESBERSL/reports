@@ -594,7 +594,7 @@ def generar_presupuesto(centro_id):
         "Cantidad": 1
     },
     "OBTURADORES": {
-        "Articulo": "BT002",
+        "Articulo": "BT014",
         "Denominación": "Suministro y montaje de obturadores.",
         "Cantidad": 1
     }
