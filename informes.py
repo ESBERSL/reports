@@ -617,11 +617,13 @@ def generar_presupuesto(centro_id):
     })
 
     for idx, (_, row) in enumerate(df.iterrows(), start=1):
-        filas.append({
-            "SubPartida": f"1. {idx}.",
-            "Denominación": row["nombre"],
-            "Cantidad"  : 1
-        })
+        defectos_celda = row.get("defectos", "")
+        if defectos_celda:  # Solo si la columna defectos no está vacía
+            filas.append({
+                "SubPartida": f"1. {idx}.",
+                "Denominación": row["nombre"],
+                "Cantidad"  : 1
+            })
         defectos_celda = row.get("defectos", "")
 
 # Convertimos a lista de defectos estandarizada
