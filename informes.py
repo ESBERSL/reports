@@ -13,7 +13,6 @@ import re
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 import uuid 
-from docx.shared import Inches
 
 # Conexión a Supabase
 url = st.secrets["supabase"]["SUPABASE_URL"]
@@ -702,7 +701,8 @@ def generar_informe_word_castellon(centro_id):
         "[CUPS]": cups,
         "[DIA]": str(dia),
         "[MES]": mes,
-        "[AÑO]": str(año)
+        "[AÑO]": str(año),
+        "[CODIGO]" : nombre_centro.split('_')[0]
     }
 
     # Reemplazo en texto
@@ -791,7 +791,7 @@ def generar_informe_word_castellon(centro_id):
 
     # Recorrer cada cuadro y generar su tabla de título y su tabla de defectos
     total_cuadros = len(defectos_por_cuadro)
-    for idx, (cuadro, lista_defectos) in enumerate(defectos_por_cuadro.items(), start=1):
+    for idx, (cuadro, lista_defectos) in enumerate(defectos_por_cuadro.items(), start=0):
 
         tipo, numero = obtener_datos_cuadro(lista_defectos[0]["cuadro_id"])
 
