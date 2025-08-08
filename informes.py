@@ -10,6 +10,10 @@ from docx.shared import Pt, RGBColor
 from docx.oxml.ns import qn
 from collections import defaultdict
 import re
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+import uuid 
+from docx.shared import Inches
 
 # Conexión a Supabase
 url = st.secrets["supabase"]["SUPABASE_URL"]
@@ -616,7 +620,7 @@ def generar_presupuesto(centro_id):
         "Denominación": "Instalación Eléctrica"
     })
 
-    for idx, (_, row) in enumerate(df.iterrows(), start=1):
+    for idx, (_, row) in enumerate(df.iterrows(), start= 1):
         defectos_celda = row.get("defectos", "")
         if defectos_celda:  # Solo si la columna defectos no está vacía
             filas.append({
@@ -657,4 +661,211 @@ def generar_presupuesto(centro_id):
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-# Función para obtener el archivo Word generado
+def generar_informe_word_castellon(centro_id):
+
+    meses = {
+    "January": "enero", "February": "febrero", "March": "marzo", "April": "abril",
+    "May": "mayo", "June": "junio", "July": "julio", "August": "agosto",
+    "September": "septiembre", "October": "octubre", "November": "noviembre", "December": "diciembre"
+    }
+    PLANTILLA_CASTELLON = "BASE_CASTELLON.docx"
+    defectos = obtener_defectos(centro_id) or []
+    plantilla = PLANTILLA_CASTELLON
+    doc = Document(plantilla)
+    
+    datos_centro = obtener_datos_centro(centro_id)
+    fecha_actual = datetime.now()
+    nombre_centro = datos_centro.get("nombre", "Desconocido")
+    direccion_centro = datos_centro.get("direccion", "Desconocida")
+    cp_centro = str(int(float(datos_centro.get("cp", 0)))) if datos_centro.get("cp") else "00000"
+    provincia_centro = datos_centro.get("provincia", "Desconocida")
+    pueblo_centro = datos_centro.get("pueblo", "Desconocido")
+    email = datos_centro.get("email", "Desconocido")
+    telf = datos_centro.get("telf", "Desconocido")
+    pot = datos_centro.get("pot", "Desconocido")
+    nif = datos_centro.get("nif", "Desconocido")
+    cups = datos_centro.get("cups", "Desconocido")
+    dia = fecha_actual.day
+    mes = meses[fecha_actual.strftime("%B")] 
+    año = fecha_actual.year
+
+    reemplazos = {
+        "[NOMBRE_EDIFICIO]": nombre_centro,
+        "[DOMICILIO]": direccion_centro,
+        "[CP]": cp_centro,
+        "[PROVINCIA]": provincia_centro,
+        "[MUNICIPIO]": pueblo_centro,
+        "[MAIL]": email,
+        "[TELEFONO]": telf,
+        "[POTENCIA]": pot,
+        "[NIF]": nif,
+        "[CUPS]": cups,
+        "[DIA]": str(dia),
+        "[MES]": mes,
+        "[AÑO]": str(año)
+    }
+
+    # Reemplazo en texto
+    for paragraph in doc.paragraphs:
+        for placeholder, valor in reemplazos.items():
+            for run in paragraph.runs:
+                if placeholder in run.text:
+                    run.text = run.text.replace(placeholder, valor)
+
+    # Reemplazo en tablas
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for para in cell.paragraphs:
+                    for run in para.runs:
+                        for placeholder, valor in reemplazos.items():
+                            if placeholder in run.text:
+                                if valor is not None:
+                                    run.text = run.text.replace(placeholder, valor)
+
+    # Reemplazo en encabezado
+    for section in doc.sections:
+        for header in section.header.paragraphs:
+            for run in header.runs:
+                for placeholder, valor in reemplazos.items():
+                    if placeholder in run.text:
+                        if valor is not None:
+                         run.text = run.text.replace(placeholder, valor)
+
+        # Obtener la tabla de 5 columnas
+    df_cuadros = obtener_cuadros(centro_id)
+
+    # Buscar la tabla donde se insertarán los datos
+    tabla = None
+    for t in doc.tables:
+        if len(t.columns) == 5:  # la tabla objetivo tiene 5 columnas
+            tabla = t
+            break
+
+    if not tabla:
+        raise ValueError("No se encontró una tabla con 5 columnas en la plantilla.")
+
+    # Agregar filas con los datos
+    for _, row in df_cuadros.iterrows():
+        row_cells = tabla.add_row().cells
+        if row['tipo'] == 'CGBT':
+            row_cells[0].text = str(row['tipo'])
+        elif row['numero']<=9:
+            row_cells[0].text = f"{str(row['tipo'])}-0{str(row['numero'])}"
+        else:
+            row_cells[0].text = f"{str(row['tipo'])}-{str(row['numero'])}" 
+        row_cells[1].text = row['nombre']
+        row_cells[2].text = str(row['tierra_ohmnios']) if row['tierra_ohmnios'] is not None else 'N/A'
+        row_cells[4].text = str(row['aislamiento_megaohmnios']) if row['aislamiento_megaohmnios'] is not None else 'N/A'
+
+    def set_cell_bg_color(cell, color_hex):
+        tc = cell._tc
+        tcPr = tc.get_or_add_tcPr()
+        shd = OxmlElement('w:shd')
+        shd.set(qn('w:fill'), color_hex)
+        tcPr.append(shd)
+
+    # Función para formatear texto (negrita, tamaño)
+    def format_text(cell, bold=False, font_size=None):
+        for paragraph in cell.paragraphs:
+            for run in paragraph.runs:
+                run.bold = bold
+                if font_size:
+                    run.font.size = Pt(font_size)
+
+    # Función para calcular calificación
+    itc_leves = {"R.E.B.T. Art. 6", "RD 485/1997"} 
+
+    def calcular_calificacion(defecto):
+        if defecto["itc"] in itc_leves:
+            return "leve"
+        return "grave"
+    
+    # Agrupar defectos por cuadro
+    defectos_por_cuadro = {}
+    for defecto in defectos:
+        cuadro = defecto["cuadro"]
+        if cuadro not in defectos_por_cuadro:
+            defectos_por_cuadro[cuadro] = []
+        defectos_por_cuadro[cuadro].append(defecto)
+
+    # Recorrer cada cuadro y generar su tabla de título y su tabla de defectos
+    total_cuadros = len(defectos_por_cuadro)
+    for idx, (cuadro, lista_defectos) in enumerate(defectos_por_cuadro.items(), start=1):
+
+        tipo, numero = obtener_datos_cuadro(lista_defectos[0]["cuadro_id"])
+
+        # Determinar código del cuadro
+        if tipo == 'CGBT':
+            codigo_cuadro = tipo
+        elif numero <= 9:
+            codigo_cuadro = f"{tipo}-0{numero}"
+        else:
+            codigo_cuadro = f"{tipo}-{numero}"
+
+        denominacion = cuadro
+
+        # Tabla del título (2x2)
+        tabla_titulo = doc.add_table(rows=2, cols=2)
+        tabla_titulo.style = 'Table Grid'
+        tabla_titulo.cell(0, 0).text = "Código del cuadro"
+        tabla_titulo.cell(0, 1).text = codigo_cuadro
+        tabla_titulo.cell(1, 0).text = "Denominación"
+        tabla_titulo.cell(1, 1).text = denominacion
+        tabla_titulo.columns[0].width = Pt(1)
+        tabla_titulo.columns[1].width = Pt(2)
+        # Negrita en las etiquetas de la tabla título
+        format_text(tabla_titulo.cell(0, 0), bold=True)
+        format_text(tabla_titulo.cell(1, 0), bold=True)
+
+        set_cell_bg_color(tabla_titulo.cell(0, 0), "a7d08c")
+        set_cell_bg_color(tabla_titulo.cell(1, 0), "a7d08c")
+        format_text(tabla_titulo.cell(0, 0), bold=True)
+        format_text(tabla_titulo.cell(1, 0), bold=True)
+
+        doc.add_paragraph("")  # Espacio después del título
+
+        # Crear tabla de defectos
+        tabla = doc.add_table(rows=1, cols=3)
+        tabla.style = 'Table Grid'
+        hdr_cells = tabla.rows[0].cells
+        hdr_cells[0].text = "Descripción"
+        hdr_cells[1].text = "Normativa"
+        hdr_cells[2].text = "Calificación"
+
+        # Formato de encabezado
+        for cell in hdr_cells:
+            set_cell_bg_color(cell, "a7d08c")
+            format_text(cell, bold=True, font_size=11)  # Encabezado 1 punto más grande
+
+        # Ajustar anchos → descripción doble de ancho que los demás
+        tabla.columns[0].width = Pt(900)  # más ancho
+        tabla.columns[1].width = Pt(35)
+        tabla.columns[2].width = Pt(35)
+
+        # Añadir filas con defectos
+        for defecto in lista_defectos:
+            row_cells = tabla.add_row().cells
+            row_cells[0].text = defecto["nombre_normalizado"]
+            row_cells[1].text = defecto["itc"]
+            row_cells[2].text = calcular_calificacion(defecto).capitalize()
+
+        # Salto de página entre cuadros
+        if idx < total_cuadros:
+            doc.add_page_break()
+            # Guardar y descargar
+            buffer = BytesIO()
+            doc.save(buffer)
+            buffer.seek(0)
+            file_path = "tmp/informe_castellon.docx"
+            doc.save(file_path)
+
+    fname = f"{fecha_actual.strftime('%Y-%m-%d')}_{nombre_centro.split('_')[0]}_RevBT"
+    with open("tmp/informe_castellon.docx", "rb") as docx_file:
+        st.download_button(
+        "Descargar Informe Extendido",
+        docx_file,
+        file_name=f"{fname}.docx",
+        mime="application/docx",
+        key=f"descargar_{fname}_{uuid.uuid4()}"
+    )    

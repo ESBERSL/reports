@@ -22,7 +22,8 @@ from informes import (
     generar_informe_word_bra,
     generar_informe_word_reparacion,
     generar_informe_bateria,
-    generar_presupuesto
+    generar_presupuesto,
+    generar_informe_word_castellon
 )
 
 # Conexión a la base de datos de Supabase
@@ -230,7 +231,7 @@ def pantalla_gestion():
     st.divider()
 
     # Botones de informes
-    c1, c2, c3, c4, c5 = st.columns(5)
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
     with c1:
         if st.button("Informe Tierras"):
             try:
@@ -252,7 +253,9 @@ def pantalla_gestion():
     with c5:
         if st.button("Presupuesto"):
             generar_presupuesto(centro_id)
-                    
+    with c6:
+        if st.button("Informe Extendido"):
+            generar_informe_word_castellon(centro_id)                
 def pantalla_gestion_bateria():
     st.title(f"Gestión de Batería de Condensadores — {st.session_state['nombre_centro']}")
     centro_id = st.session_state["centro_seleccionado"]
