@@ -64,14 +64,16 @@ def pantalla_baja():
         st.session_state["pagina"] = "inicio"
         guardar_estado_sesion(st.session_state["usuario"], "inicio", None, None)
         st.rerun()    
+    df = obtener_centros()
+    df = df.sort_values(by="nombre")
 
     # Filtros
-    provincia = st.selectbox("Filtrar por cliente", ["Todos", "Conselleria Alicante", "Conselleria Valencia", "Conselleria Castellón", "DIV", "Nous Espais", "Ayto Catarroja", "Ayto Torrent", "Ayto Aldaia","Unión de Mutuas","FDM Torrent","Caritas"], key="provincia")
+    clientes = ["Todos"] + sorted(df["cliente"].dropna().unique().tolist())
+    provincia = st.selectbox("Filtrar por cliente", clientes, key="provincia")
     busqueda = st.text_input("Buscar centro", key="busqueda")
     
 
-    df = obtener_centros()
-    df = df.sort_values(by="nombre")
+    
     if provincia != "Todos":
         df = df[df["cliente"] == provincia]
     if busqueda:
