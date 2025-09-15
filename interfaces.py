@@ -66,12 +66,11 @@ def pantalla_baja():
         st.rerun()    
 
     # Filtros
-    provincia = st.selectbox("Filtrar por cliente", ["Todos", "Conselleria Alicante", "Conselleria Valencia", "Conselleria Castellón", "DIV", "Nous Espais", "Ayto Catarroja", "Ayto Torrent", "Ayto Aldaia"], key="provincia")
+    provincia = st.selectbox("Filtrar por cliente", ["Todos", "Conselleria Alicante", "Conselleria Valencia", "Conselleria Castellón", "DIV", "Nous Espais", "Ayto Catarroja", "Ayto Torrent", "Ayto Aldaia","Unión de Mutuas","FDM Torrent"], key="provincia")
     busqueda = st.text_input("Buscar centro", key="busqueda")
     
 
     df = obtener_centros()
-    df = df[df["tipo"] == "baja"]
     df = df.sort_values(by="nombre")
     if provincia != "Todos":
         df = df[df["cliente"] == provincia]
@@ -99,7 +98,7 @@ def pantalla_bateria():
             st.rerun()    
 
     # Filtros
-    provincia = st.selectbox("Filtrar por cliente", ["Todos", "Conselleria Alicante", "Conselleria Valencia", "Conselleria Castellón", "DIV", "Nous Espais", "Ayto Catarroja", "Ayto Torrent", "Ayto Aldaia"], key="provincia")
+    provincia = st.selectbox("Filtrar por cliente", ["Todos", "Conselleria Alicante", "Conselleria Valencia", "Conselleria Castellón", "DIV", "Nous Espais", "Ayto Catarroja", "Ayto Torrent", "Ayto Aldaia", "Union de Mutuas"], key="provincia")
     busqueda = st.text_input("Buscar batería", key="busqueda")
 
     df = obtener_centros("centros_bateria")

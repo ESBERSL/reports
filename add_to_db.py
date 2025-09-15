@@ -25,11 +25,12 @@ if excel_file is not None:
         "telefono": "telf",
         "cliente": "cliente",
         "email": "email",
-        "nif": "nif"
+        "nif": "nif",
+        "provincia": "provincia"
     })
 
     # Seleccionar solo las columnas necesarias
-    campos_db = ["nombre", "direccion", "pueblo", "cp", "telf", "cliente", "email", "nif"]
+    campos_db = ["nombre", "direccion", "pueblo", "cp", "telf", "cliente", "email", "nif", "provincia"]
     df = df[campos_db]
 
     # Insertar cada fila en la tabla 'centros'
