@@ -34,7 +34,7 @@ def pantalla_inicio():
         st.rerun()
 
     # Filtros
-    provincia = st.selectbox("Filtrar por cliente", ["Todos", "Conselleria Alicante", "Conselleria Valencia", "Conselleria Castellón", "DIV", "Nous Espais", "Ayto Catarroja", "Ayto Torrent", "Ayto Aldaia"], key="provincia")
+    provincia = st.selectbox("Filtrar por cliente", ["Todos", "Conselleria Alicante", "Conselleria Valencia", "Conselleria Castellón", "DIV", "Nous Espais", "Ayto Catarroja", "Ayto Torrent", "Ayto Aldaia","Unión de Mutuas","FDM Torrent"], key="provincia")
     busqueda = st.text_input("Buscar centro", key="busqueda")
     
 
