@@ -9,6 +9,7 @@ supabase = create_client(url, key)
 
 password = input("pass de la cuenta nueva: ")
 hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+print(hashed_password)
 
 supabase.table('usuarios').insert({
     "username": input("user nuevo: "),
