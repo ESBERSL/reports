@@ -7,6 +7,6 @@ streamlit-javascript
 python-docx
 reportlab
 pdfkit
-streamlit_cookies_manager
+streamlit_cookies_manager-v2
 openpyxl
 pandas
